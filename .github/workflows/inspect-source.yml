@@ -1,0 +1,36 @@
+name: Inspect AU10 source archive
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'au10-statistics-main.zip'
+      - '.github/workflows/inspect-source.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract and list source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f au10-statistics-main.zip
+          file au10-statistics-main.zip
+          unzip -l au10-statistics-main.zip | tee archive-list.txt
+          mkdir extracted
+          unzip -q au10-statistics-main.zip -d extracted
+          find extracted -maxdepth 5 -type f | sort | head -500 | tee extracted-files.txt
+          find extracted -type f \( -name '*.xcodeproj' -o -name 'Package.swift' -o -name 'project.yml' -o -name 'Podfile' -o -name 'Info.plist' -o -name 'index.html' -o -name 'package.json' -o -name '*.swift' -o -name '*.yml' -o -name '*.yaml' \) | sort | head -300 | tee key-files.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: au10-source-inspection
+          path: |
+            archive-list.txt
+            extracted-files.txt
+            key-files.txt
+          if-no-files-found: error
