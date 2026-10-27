@@ -33,4 +33,5 @@ jobs:
             archive-list.txt
             extracted-files.txt
             key-files.txt
+            extracted/
           if-no-files-found: error
