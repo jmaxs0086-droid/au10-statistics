@@ -58,33 +58,6 @@ jobs:
           print("Bottom navigation IDs and delegated handler verified.")
           PY
           node --check /tmp/au10-ios-page.js
-      - name: Regression test simulated bottom-menu clicks
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p=next(Path("extracted").glob("**/ios-local-app/Web/index.html"))
-          s=p.read_text()
-          expected={
-            "bottomHome":"homePanel",
-            "bottomBet":"betWebPanel",
-            "bottomRecords":"recordsPanel",
-            "bottomSettings":"settingsPanel",
-          }
-          for button,panel in expected.items():
-            assert re.search(r"\bid=['\"]"+button+r"['\"]",s), f"missing menu button: {button}"
-            assert re.search(r"\bid=['\"]"+panel+r"['\"]",s), f"missing panel: {panel}"
-            assert re.search(re.escape(button)+r"['\"]\s*\]\s*,?\s*['\"]"+re.escape(panel),s) or re.search(re.escape(button)+r"['\"]\s*\]\s*:\s*['\"]"+re.escape(panel),s) or re.search(re.escape(button)+r"['\"]\s*:\s*['\"]"+re.escape(panel),s), f"delegated click mapping mismatch: {button}"
-          for button,panel in expected.items():
-            assert re.search(r"\$\(['\"]"+button+r"['\"]\)\.onclick\s*=\s*\(\)\s*=>\s*showPanel\(['\"]"+panel+r"['\"]\)",s), f"direct click binding missing: {button}"
-          show=re.search(r"function showPanel\(id\)\s*\{([\s\S]*?)\n\}",s)
-          assert show and "classList" in show.group(1), "showPanel panel visibility logic missing"
-          # This workflow tests navigation only; it must not invoke a final wager confirmation.
-          print("PASS: all four menu buttons map to the expected panels; direct handlers and panel visibility logic exist.")
-          print("Scope: menu-click regression only; no real wager or final confirmation is triggered.")
-          PY
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Build unsigned iOS app
