@@ -70,8 +70,13 @@ jobs:
           xcodebuild -project AU10Local.xcodeproj -scheme AU10Local -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
           APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -name 'AU10Local.app' -path '*/Build/Products/Release-iphoneos/*' -print -quit)"
           test -n "$APP_PATH"
+          # Ensure the local HTML entry point is actually inside the built app bundle.
+          mkdir -p "$APP_PATH/Web"
+          cp "$HTML" "$APP_PATH/Web/index.html"
+          test -s "$APP_PATH/Web/index.html"
           mkdir -p "$GITHUB_WORKSPACE/package/Payload"
           cp -R "$APP_PATH" "$GITHUB_WORKSPACE/package/Payload/"
+          test -s "$GITHUB_WORKSPACE/package/Payload/AU10Local.app/Web/index.html"
           cd "$GITHUB_WORKSPACE/package"
           zip -qr AU10Local-unsigned.ipa Payload
       - name: Upload build and validation report
