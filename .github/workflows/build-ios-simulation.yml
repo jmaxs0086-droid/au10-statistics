@@ -1,0 +1,85 @@
+name: Build iOS simulation app
+on:
+  push:
+    paths:
+      - '.github/workflows/build-ios-simulation.yml'
+      - 'au10-statistics-main.zip'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract original project
+        run: |
+          mkdir -p extracted
+          unzip -q au10-statistics-main.zip -d extracted
+          find extracted -path '*/ios-local-app/Web/index.html' -print
+      - name: Validate and patch simulation UI only
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTML="$(find extracted -path '*/ios-local-app/Web/index.html' -print -quit)"
+          test -n "$HTML"
+          python3 - "$HTML" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1])
+          s=p.read_text()
+          # Keep the existing panels and features. Add a delegated click fallback for the four bottom tabs,
+          # so navigation remains wired even if a direct onclick binding is overwritten.
+          marker="function initMenu(){"
+          if marker not in s:
+              raise SystemExit("initMenu() not found; refusing to modify an unexpected source")
+          fallback="""document.addEventListener('click',function(event){
+           const button=event.target&&event.target.closest?event.target.closest('#bottomHome,#bottomBet,#bottomRecords,#bottomSettings'):null;
+           if(!button)return;
+           const map={bottomHome:'homePanel',bottomBet:'betWebPanel',bottomRecords:'recordsPanel',bottomSettings:'settingsPanel'};
+           const panel=map[button.id];
+           if(panel){event.preventDefault();showPanel(panel);}
+          },true);
+          """
+          if fallback not in s:
+              s=s.replace(marker,fallback+"\n"+marker,1)
+          p.write_text(s)
+          print("Patched bottom-tab click fallback:",p)
+          PY
+          node --version
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=next(Path("extracted").glob("**/ios-local-app/Web/index.html"))
+          s=p.read_text()
+          assert all(x in s for x in ["bottomHome","bottomBet","bottomRecords","bottomSettings","showPanel(panel)"])
+          scripts=re.findall(r'<script[^>]*>(.*?)</script>',s,re.S|re.I)
+          Path('/tmp/au10-ios-page.js').write_text('\n'.join(scripts))
+          print("Bottom navigation IDs and delegated handler verified.")
+          PY
+          node --check /tmp/au10-ios-page.js
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build unsigned iOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="$(find extracted -type f -path '*/ios-local-app/project.yml' -print -quit | xargs dirname)"
+          cd "$APP_DIR"
+          xcodegen generate --spec project.yml
+          xcodebuild -project AU10Local.xcodeproj -scheme AU10Local -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
+          APP_PATH="$(find build -type d -name 'AU10Local.app' -print -quit)"
+          test -n "$APP_PATH"
+          mkdir -p "$GITHUB_WORKSPACE/package/Payload"
+          cp -R "$APP_PATH" "$GITHUB_WORKSPACE/package/Payload/"
+          cd "$GITHUB_WORKSPACE/package"
+          zip -qr AU10Local-unsigned.ipa Payload
+      - name: Upload build and validation report
+        uses: actions/upload-artifact@v4
+        with:
+          name: au10-simulation-unsigned-ipa
+          path: |
+            package/AU10Local-unsigned.ipa
+            extracted/**/ios-local-app/Web/index.html
+          if-no-files-found: error
+          retention-days: 30
