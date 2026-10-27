@@ -71,6 +71,8 @@ jobs:
           APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -name 'AU10Local.app' -path '*/Build/Products/Release-iphoneos/*' -print -quit)"
           test -n "$APP_PATH"
           # Ensure the local HTML entry point is actually inside the built app bundle.
+          HTML="$(find "$GITHUB_WORKSPACE/extracted" -path '*/ios-local-app/Web/index.html' -print -quit)"
+          test -n "$HTML"
           mkdir -p "$APP_PATH/Web"
           cp "$HTML" "$APP_PATH/Web/index.html"
           test -s "$APP_PATH/Web/index.html"
