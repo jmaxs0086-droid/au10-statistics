@@ -80,13 +80,17 @@ jobs:
 
           pat = r"function sendCoordinateAction\(issue,nums,manual=false\)\{.*?\n\}\n\$\('autoCoordEnabled'\)"
           fn = """function getAutoBetAmount(issue){
+           try{
+            const brain=window.AU10LocalBrain;
+            if(brain&&typeof brain.setAmounts==='function'&&typeof brain.amount==='function'){
+             const settings=readBetSettings();
+             if(Array.isArray(settings.tiers)&&settings.tiers.length===4)brain.setAmounts(settings.tiers);
+             return String(Math.round(Math.max(0,Number(brain.amount())||0)*100)/100);
+            }
+           }catch(_){}
            const settings=readBetSettings();
-           const cmp=(a,b)=>String(a??'').localeCompare(String(b??''),undefined,{numeric:true});
-           const before=loadSimRounds().filter(x=>!x.backtest&&(x.result==='hit'||x.result==='miss')&&cmp(x.issue,issue)<0).sort((a,b)=>cmp(a.issue,b.issue));
-           let misses=0;for(let i=before.length-1;i>=0;i--){if(before[i].result==='miss')misses++;else break;}
-           const tiers=(Array.isArray(settings.tiers)&&settings.tiers.length===4?settings.tiers:[5,15,45,135]).map(Number);
-           const amount=Number(tiers[Math.min(misses,3)]);
-           return String(Math.round(Math.max(0,Number.isFinite(amount)?amount:0)*100)/100);
+           const tiers=(Array.isArray(settings.tiers)&&settings.tiers.length===4?settings.tiers:[5,15,45,90]).map(Number);
+           return String(Math.round(Math.max(0,Number(tiers[0])||0)*100)/100);
           }
           function sendCoordinateAction(issue,nums,manual=false){
            const frame=$('betWebFrame');
