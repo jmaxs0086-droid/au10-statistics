@@ -147,7 +147,7 @@ jobs:
               raise SystemExit("Missing iOS local brain module")
           brain_text = repo_brain.read_text(encoding="utf-8")
           if "local-brain.js" not in s:
-              s = s.replace("</body>", '<script src="local-brain.js"></script>\\n</body>', 1)
+              s = s.replace("</body>", '<script src="local-brain.js"></script>\n</body>', 1)
           # Show the current four issue-tail queue and active betting tier on the Records screen.
           records_status = """
           <style id="au10-current-bet-status-style">
@@ -246,7 +246,7 @@ jobs:
                       clickAt(confirmPoint[0],confirmPoint[1],'已验证的确认投注按钮'); await wait(900);
                       report('已执行最终确认按钮点击。请立即核对网页投注回执和投注记录；若网页无明确成功回执，不要重复启动以免重复下注。');
                     } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
-          t = t[:seq_start] + new_seq + "\\n" + t[seq_end:]
+          t = t[:seq_start] + new_seq + "\n" + t[seq_end:]
           sp.write_text(t, encoding="utf-8")
 
           scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
