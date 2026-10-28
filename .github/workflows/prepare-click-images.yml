@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '点击位置截图.zip'
+      - 'au10-statistics-main.zip'
       - '.github/workflows/prepare-click-images.yml'
 permissions:
   contents: read
@@ -12,14 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Extract marked screenshots
+      - name: Extract marked screenshots and source archive
         run: |
           mkdir -p extracted-click-images
           unzip -o '点击位置截图.zip' -d extracted-click-images
+          cp au10-statistics-main.zip extracted-click-images/
           find extracted-click-images -type f -maxdepth 3 -print
       - uses: actions/upload-artifact@v4
         with:
-          name: click-position-images
+          name: click-position-images-and-source
           path: extracted-click-images/
           if-no-files-found: error
           retention-days: 1
