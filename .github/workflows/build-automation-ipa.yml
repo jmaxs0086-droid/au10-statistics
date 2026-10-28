@@ -104,7 +104,7 @@ jobs:
            if(!frame||!frame.contentWindow||!betFrameLoaded){$('betWebUrlStatus').textContent='投注网页未加载，自动操作已停止。';return false;}
            const coords={numbers:[[0.291,0.421],[0.486,0.421],[0.679,0.421],[0.874,0.421],[0.292,0.527],[0.486,0.527],[0.679,0.527],[0.873,0.527],[0.291,0.634],[0.486,0.634]],amount:[0.875,0.828],immediate:[0.823,0.924],clear:[0.925,0.233],close:[0.059,0.233],confirm:[0.499,0.941],reset:true};
            const payload={type:'AU10_COORD_ACTION',issue:String(issue||''),nums:nums.map(Number),amount:getAutoBetAmount(issue),coords};
-           try{frame.contentWindow.postMessage(payload,'*');$('betWebUrlStatus').textContent='已发送截图坐标自动选号与金额填写序列；最终提交需手动确认。';return true;}catch(e){$('betWebUrlStatus').textContent='坐标操作请求失败：'+(e.message||e);return false;}
+           try{frame.contentWindow.postMessage(payload,'*');$('betWebUrlStatus').textContent='已发送自动选号、金额填写及最终确认序列；请以网站订单记录核验结果。';return true;}catch(e){$('betWebUrlStatus').textContent='坐标操作请求失败：'+(e.message||e);return false;}
           }
           $('autoCoordEnabled')"""
           s, n = re.subn(pat, lambda m: fn, s, count=1, flags=re.S)
@@ -138,8 +138,8 @@ jobs:
           s = s.replace("$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,$('autoCoordEnabled').checked?'1':'0');$('betWebUrlStatus').textContent=$('autoCoordEnabled').checked?'已启用新期开奖自动坐标操作；仅尝试打开最终确认页。':'已关闭新期开奖自动坐标操作。';});",
                         "$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,'1');});")
           s = s.replace('状态：运行中。每 15 秒检查开奖、生成每期六号码模拟记录，并在开奖结算后核对命中；未启用真实投注。',
-                        '状态：运行中。每15秒检查开奖；符合条件时按69/70标注位置自动选号、填写金额并打开最终确认页；最终提交由你手动确认。')
-          s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '符合条件的新开奖会触发截图坐标操作；请保持网页布局与标注截图一致。')
+                        '状态：运行中。每15秒检查开奖；符合条件时按69/70标注位置自动选号、填写金额并尝试自动点击最终确认；订单是否成功以网站返回和投注记录为准。')
+          s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '符合条件的新开奖会触发截图坐标自动操作，包括最终确认按钮；请保持网页布局与标注截图一致，并核验网站订单结果。')
           # Bundle the on-device decision core and load it after the existing app script.
           brain = pathlib.Path("/tmp/local-brain.js")
           repo_brain = pathlib.Path.cwd() / "ios-local-app/Web/local-brain.js"
