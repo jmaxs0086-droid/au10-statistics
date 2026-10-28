@@ -237,8 +237,7 @@ jobs:
                       const visibleText=String(document.body?.innerText||'').slice(-5000).replace(/\\\\s+/g,'');
                       const modalLikely=/(确认投注|确认下注|投注确认|下注确认)/.test(visibleText);
                       if(!confirmEl||!confirmEl.getClientRects().length||!modalLikely||!/(确认|投注|下注)/.test(confirmLabel)) throw new Error('未能验证确认页和确认按钮文字；为防误投，已停止在最终确认前');
-                      clickAt(confirmPoint[0],confirmPoint[1],'已验证的确认投注按钮'); await wait(500);
-                      report('自动坐标序列已执行：号码点击'+completed+'/6，金额字段校验为'+value+'，并已点击确认投注。网站是否接受仍以页面回执/投注记录为准。');
+                      report('已到最终确认页：号码点击'+completed+'/6，金额字段校验为'+value+'；已停止在最终提交前，请核对期号、号码和金额后手动确认。');
                     } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
           t = t[:seq_start] + new_seq + "\\n" + t[seq_end:]
           sp.write_text(t, encoding="utf-8")
@@ -250,6 +249,8 @@ jobs:
           assert "setAutomationState(!automationRunning)" in s
           assert 'id="au10-automation-settings-only"' in s
           assert '确认投注' in t and 'Number.isFinite(x)' in t
+          assert "clickAt(confirmPoint[0],confirmPoint[1]" not in t
+          assert '已停止在最终提交前' in t
           print('Screenshot-coordinate automation patch verified.')
           PY
           node --check /tmp/au10-automation.js
