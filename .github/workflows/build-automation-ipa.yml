@@ -296,7 +296,7 @@ jobs:
 
           t = sp.read_text(encoding="utf-8")
           # Register a native WKWebView message bridge for coordinate taps.
-          content_matches = list(re.finditer(r'(?m)^(\s*)(\w+)\.userContentController\s*=\s*(\w+)\s*
+          content_matches = list(re.finditer(r'(?m)^(\s*)(\w+)\.userContentController\s*=\s*(\w+)', t))
           if content_matches:
               indent, config_name, content_name = content_matches[0].group(1), content_matches[0].group(2), content_matches[0].group(3)
               line = content_matches[0].group(0)
