@@ -8,6 +8,7 @@ on:
       - 'au10-statistics-main.zip'
       - 'ios-local-app/Web/local-brain.js'
       - 'ios-local-app/CoordinateExecutor/AU10CoordinateExecutor.swift'
+      - 'ios-local-app/tests/local-brain.test.cjs'
 
 permissions:
   contents: read
@@ -17,6 +18,17 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Node.js for local-brain tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check local-brain syntax
+        run: node --check ios-local-app/Web/local-brain.js
+
+      - name: Run local-brain regression tests (mock environment only)
+        run: node ios-local-app/tests/local-brain.test.cjs
 
       - name: Extract original project
         shell: bash
