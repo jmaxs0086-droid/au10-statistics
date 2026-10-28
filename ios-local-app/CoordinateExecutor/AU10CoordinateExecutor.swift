@@ -157,14 +157,30 @@ final class AU10CoordinateMessageHandler: NSObject, WKScriptMessageHandler {
               let y = body["y"] as? NSNumber else { return }
 
         let label = String(describing: body["label"] ?? "")
+        let requestID = String(describing: body["requestId"] ?? "")
         // Keep real-money submission disabled: this handler never injects the final confirmation tap.
         guard label != "最终确认投注" && label != "final-confirm" else { return }
 
         DispatchQueue.main.async {
-            guard let webView = Self.findWebView(in: UIApplication.shared) else { return }
+            guard let webView = Self.findWebView(in: UIApplication.shared),
+                  let window = webView.window else { return }
             let pointInWebView = CGPoint(x: CGFloat(truncating: x), y: CGFloat(truncating: y))
-            let pointInWindow = webView.convert(pointInWebView, to: webView.window)
-            _ = AU10CoordinateExecutor.shared.tap(screenX: pointInWindow.x, screenY: pointInWindow.y)
+            let pointInWindow = webView.convert(pointInWebView, to: window)
+            let screenPoint = window.convert(pointInWindow, to: UIScreen.main.coordinateSpace)
+            let dispatched = AU10CoordinateExecutor.shared.tap(screenX: screenPoint.x, screenY: screenPoint.y)
+
+            // Report only whether the private HID dispatch call ran; this is not proof that
+            // the intended webpage control received or accepted the touch.
+            let result: [String: Any] = [
+                "type": "AU10_NATIVE_TAP_RESULT",
+                "requestId": requestID,
+                "label": label,
+                "dispatched": dispatched
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: result, options: [.fragmentsAllowed]),
+               let json = String(data: data, encoding: .utf8) {
+                webView.evaluateJavaScript("window.postMessage(\(json), '*')", completionHandler: nil)
+            }
         }
     }
 
