@@ -268,6 +268,7 @@ jobs:
                       try {
                         clickAt(confirmPoint[0],confirmPoint[1],'最终确认投注');
                         report('已自动点击最终确认按钮。请检查网页返回状态与投注记录，不能仅凭点击提示认定订单已成功。');
+                        setTimeout(()=>{window.__au10FinalSubmitInProgress=false;},20000);
                       } catch(finalErr) {
                         window.__au10FinalSubmitInProgress=false;
                         throw finalErr;
