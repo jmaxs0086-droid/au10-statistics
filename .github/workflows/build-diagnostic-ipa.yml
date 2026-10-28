@@ -40,26 +40,21 @@ jobs:
           s = p.read_text(encoding="utf-8")
           original = s
 
-          # Remove UI elements that directly trigger screenshot-coordinate actions.
-          s = re.sub(r'<button\\b[^>]*id=["\\']runScreenshotCoords["\\'][^>]*>.*?</button>', '', s, flags=re.I|re.S)
-          s = re.sub(r'<label\\b[^>]*>[^<]*自动坐标[^<]*<input\\b[^>]*id=["\\']autoCoordEnabled["\\'][^>]*>.*?</label>', '', s, flags=re.I|re.S)
+          s = re.sub(r'<button\b[^>]*id=["\']runScreenshotCoords["\'][^>]*>.*?</button>', '', s, flags=re.I|re.S)
+          s = re.sub(r'<label\b[^>]*>[^<]*自动坐标[^<]*<input\b[^>]*id=["\']autoCoordEnabled["\'][^>]*>.*?</label>', '', s, flags=re.I|re.S)
 
-          # Replace the coordinate-action sender with a hard-disabled diagnostic stub.
-          pattern = r'function\\s+sendCoordinateAction\\s*\\([^)]*\\)\\s*\\{.*?\\n\\s*\\}'
+          pattern = r'function\s+sendCoordinateAction\s*\([^)]*\)\s*\{.*?\n\s*\}'
           replacement = '''function sendCoordinateAction() {
             console.warn("[AU10] 坐标自动操作已在诊断构建中禁用；请手动操作网页。");
             return false;
           }'''
           s2, n = re.subn(pattern, replacement, s, count=1, flags=re.S)
           if n == 0:
-              # Some versions define it as a const/let arrow function.
-              pattern2 = r'(?:const|let|var)\\s+sendCoordinateAction\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{.*?\\n\\s*\\};'
+              pattern2 = r'(?:const|let|var)\s+sendCoordinateAction\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{.*?\n\s*\};'
               s2, n = re.subn(pattern2, replacement, s, count=1, flags=re.S)
           if n == 0:
               raise SystemExit("Could not safely locate sendCoordinateAction; refusing to build an unpatched app")
           s = s2
-
-          # Remove direct native-message dispatches as a defense in depth.
           s = s.replace("AU10_COORD_ACTION", "AU10_COORD_ACTION_DISABLED")
           if s == original:
               raise SystemExit("No source changes detected; refusing to package")
@@ -67,7 +62,6 @@ jobs:
           print("Patched diagnostic-only HTML:", p)
           PY
 
-          # Validate the patched source and JavaScript syntax.
           python3 - "$HTML_PATH" <<'PY'
           import pathlib, re, sys
           s = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
@@ -75,7 +69,7 @@ jobs:
           assert "return false;" in s
           assert "AU10_COORD_ACTION</" not in s
           scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
-          pathlib.Path("/tmp/au10-diagnostic.js").write_text("\\n".join(scripts), encoding="utf-8")
+          pathlib.Path("/tmp/au10-diagnostic.js").write_text("\n".join(scripts), encoding="utf-8")
           print("Validated coordinate sender is disabled.")
           PY
           node --check /tmp/au10-diagnostic.js
