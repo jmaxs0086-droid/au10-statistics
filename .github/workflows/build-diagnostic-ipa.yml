@@ -75,8 +75,8 @@ jobs:
           s = s.replace(old_guard, "if(rows.length<288){", 1)
           s = s.replace("主预测需要至少 25 期有效开奖记录", "本地策略需要至少 288 期有效开奖记录", 1)
           # Guard against a null prediction result before rendering candidate numbers.
-          old_render = "  const current=predictAt(rows,false);\\n  const last=rows[rows.length-1];"
-          new_render = "  const current=predictAt(rows,false);\\n  if(!current||!Array.isArray(current.nums)||current.nums.length!==6){if(currentBox)currentBox.textContent='本地计算未返回有效的六个候选号。';say('本地计算未返回有效结果；未生成候选号。');return;}\\n  const last=rows[rows.length-1];"
+          old_render = "  const current=predictAt(rows,false);\n  const last=rows[rows.length-1];"
+          new_render = "  const current=predictAt(rows,false);\n  if(!current||!Array.isArray(current.nums)||current.nums.length!==6){if(currentBox)currentBox.textContent='本地计算未返回有效的六个候选号。';say('本地计算未返回有效结果；未生成候选号。');return;}\n  const last=rows[rows.length-1];"
           if old_render in s:
               s = s.replace(old_render, new_render, 1)
           else:
