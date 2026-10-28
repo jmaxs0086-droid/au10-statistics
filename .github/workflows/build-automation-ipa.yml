@@ -161,6 +161,7 @@ jobs:
               s = s.replace('</head>', records_status + '\n</head>', 1)
           records_script = r"""<script id="au10-records-bet-state">
           (function(){
+            var lastHistorySignature='';
             function renderAU10BetState(){
               try{
                 var panel=document.getElementById('recordsPanel');
@@ -177,8 +178,12 @@ jobs:
                 var history=[];
                 try{if(typeof window.loadSimRounds==='function')history=window.loadSimRounds()||[];}catch(e){}
                 var state=brain&&typeof brain.getState==='function'?brain.getState():null;
-                if(brain&&typeof brain.buildMissQueue==='function'&&history.length&&(!state||!Array.isArray(state.queue)||state.queue.length===0)){
-                  try{brain.buildMissQueue(history);state=brain.getState();}catch(e){}
+                // Refresh the persisted queue only when source history changes.
+                // This avoids showing a stale queue while preserving already-consumed tails.
+                var historySignature='';
+                try{historySignature=JSON.stringify(history.map(function(x){return [x&&(x.issue??x.period??x.issueNo??x.expect),x&&x.result,x&&(x.champion??x.actualChampion??x.lastDrawChampion??x.winner??x.resultChampion),x&&(x.candidates??x.nums??x.candidateNumbers)];}));}catch(e){}
+                if(brain&&typeof brain.buildMissQueue==='function'&&history.length&&historySignature&&historySignature!==lastHistorySignature){
+                  try{brain.buildMissQueue(history);state=brain.getState();lastHistorySignature=historySignature;}catch(e){}
                 }
                 var tails=state&&Array.isArray(state.queue)?state.queue.slice(-4):[];
                 var tailEl=document.getElementById('au10-current-tails');
