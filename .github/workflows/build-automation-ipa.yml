@@ -272,7 +272,7 @@ jobs:
           window.addEventListener('message',function(ev){var d=ev.data;if(!d||d.type!=='AU10_COORD_ACK')return;var el=document.getElementById('betWebUrlStatus');if(el)el.textContent='执行器回执：投注网页已收到期号 '+String(d.issue||'')+' 的任务，正在尝试执行；这不代表任何点击或投注已成功。';});
           </script>"""
           if 'id="au10-coordinate-ack-listener"' not in s:
-              s = s.replace('</body>', coord_ack_listener + '\\n</body>', 1)
+              s = s.replace('</body>', coord_ack_listener + '\n</body>', 1)
           coord_native_listener = """<script id="au10-native-coordinate-bridge">
           window.addEventListener('message',function(ev){
             var d=ev.data;
@@ -284,7 +284,7 @@ jobs:
           });
           </script>"""
           if 'id="au10-native-coordinate-bridge"' not in s:
-              s = s.replace('</body>', coord_native_listener + '\\n</body>', 1)
+              s = s.replace('</body>', coord_native_listener + '\n</body>', 1)
           coord_native_result_listener = """<script id="au10-native-coordinate-result-listener">
           window.addEventListener('message',function(ev){
             var d=ev.data;
@@ -294,7 +294,7 @@ jobs:
           });
           </script>"""
           if 'id="au10-native-coordinate-result-listener"' not in s:
-              s = s.replace('</body>', coord_native_result_listener + '\\n</body>', 1)
+              s = s.replace('</body>', coord_native_result_listener + '\n</body>', 1)
           # Ensure :has() is not needed to hide records-only legacy panels on iOS 15.3.
           s = s.replace("#recordsPanel .tablewrap:has(#historyRows),", "#recordsPanel #historyRows,")
           s = s.replace("#recordsPanel .metrics:has(#simCount),", "#recordsPanel #simCount,")
