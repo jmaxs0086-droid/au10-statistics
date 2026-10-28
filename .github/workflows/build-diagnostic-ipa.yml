@@ -55,6 +55,24 @@ jobs:
           if n == 0:
               raise SystemExit("Could not safely locate sendCoordinateAction; refusing to build an unpatched app")
           s = s2
+
+          # Removed controls must not leave JS references that abort all initialization.
+          s, removed = re.subn(
+              r"\\$\\('autoCoordEnabled'\\)\\.checked=.*?(?=\\$\\('saveBetWebUrl'\\)\\.onclick=)",
+              "",
+              s,
+              count=1,
+              flags=re.S,
+          )
+          if removed != 1:
+              raise SystemExit("Could not safely remove stale listeners for removed coordinate controls")
+
+          # Load the configured webpage immediately; otherwise the iframe remains about:blank.
+          init_needle = "if(frame.src!==url){betFrameLoaded=false;frame.src=url;}\\n}"
+          if init_needle not in s:
+              raise SystemExit("Could not locate applyBetWebUrl() initializer safely")
+          s = s.replace(init_needle, init_needle + "\\napplyBetWebUrl();", 1)
+
           s = s.replace("AU10_COORD_ACTION", "AU10_COORD_ACTION_DISABLED")
           if s == original:
               raise SystemExit("No source changes detected; refusing to package")
@@ -68,6 +86,9 @@ jobs:
           assert "function sendCoordinateAction()" in s
           assert "return false;" in s
           assert "AU10_COORD_ACTION</" not in s
+          assert "$('autoCoordEnabled').checked=" not in s
+          assert "$('runScreenshotCoords').onclick=" not in s
+          assert s.count("applyBetWebUrl();") >= 2
           scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
           pathlib.Path("/tmp/au10-diagnostic.js").write_text("\n".join(scripts), encoding="utf-8")
           print("Validated coordinate sender is disabled.")
