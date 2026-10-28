@@ -238,12 +238,26 @@ jobs:
                       if (String(inputEl.value)!==value) throw new Error('金额输入后校验不一致；已停止，未点击下一步');
                       clickAt(coords.immediate?.[0],coords.immediate?.[1],'立即投注/下一步'); await wait(700);
                       const confirmPoint=coords.confirm;
-                      const confirmEl=document.elementFromPoint(Math.round(Number(confirmPoint?.[0])*Math.max(1,innerWidth-1)),Math.round(Number(confirmPoint?.[1])*Math.max(1,innerHeight-1)));
+                      if(!Array.isArray(confirmPoint)||confirmPoint.length<2) throw new Error('未配置最终确认按钮坐标；已停止');
+                      const px=Math.round(Number(confirmPoint[0])*Math.max(1,innerWidth-1));
+                      const py=Math.round(Number(confirmPoint[1])*Math.max(1,innerHeight-1));
+                      const hit=document.elementFromPoint(px,py);
+                      const confirmEl=hit&&(hit.closest('button,input[type="button"],input[type="submit"],[role="button"],a')||hit);
                       const confirmLabel=String((confirmEl&&(confirmEl.innerText||confirmEl.value||confirmEl.getAttribute('aria-label')||confirmEl.title))||'').replace(/\\\\s+/g,'');
                       const visibleText=String(document.body?.innerText||'').slice(-5000).replace(/\\\\s+/g,'');
                       const modalLikely=/(确认投注|确认下注|投注确认|下注确认)/.test(visibleText);
-                      if(!confirmEl||!confirmEl.getClientRects().length||!modalLikely||!/(确认|投注|下注)/.test(confirmLabel)) throw new Error('未能验证确认页和确认按钮文字；为防误投，已停止在最终确认前');
-                      report('已验证最终确认页和确认按钮位置；为避免误投，自动化停在最终提交前，请核对期号、号码和金额后手动点击确认。');
+                      const isVisible=!!(confirmEl&&confirmEl.getClientRects().length&&getComputedStyle(confirmEl).visibility!=='hidden'&&getComputedStyle(confirmEl).display!=='none');
+                      const isEnabled=!!(confirmEl&&!confirmEl.disabled&&confirmEl.getAttribute('aria-disabled')!=='true');
+                      if(!isVisible||!isEnabled||!modalLikely||!/(确认|投注|下注)/.test(confirmLabel)) throw new Error('未能验证确认页、按钮文字或按钮状态；已停止，未提交');
+                      if(window.__au10FinalSubmitInProgress) throw new Error('最终确认已触发，防重复提交保护已阻止再次点击');
+                      window.__au10FinalSubmitInProgress=true;
+                      try {
+                        clickAt(confirmPoint[0],confirmPoint[1],'最终确认投注');
+                        report('已自动点击最终确认按钮。请检查网页返回状态与投注记录，不能仅凭点击提示认定订单已成功。');
+                      } catch(finalErr) {
+                        window.__au10FinalSubmitInProgress=false;
+                        throw finalErr;
+                      }
                     } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
           t = t[:seq_start] + new_seq + "\n" + t[seq_end:]
           sp.write_text(t, encoding="utf-8")
@@ -255,8 +269,9 @@ jobs:
           assert "setAutomationState(!automationRunning)" in s
           assert 'id="au10-automation-settings-only"' in s
           assert '确认投注' in t and 'Number.isFinite(x)' in t
-          assert "clickAt(confirmPoint[0],confirmPoint[1],'已验证的确认投注按钮')" not in t
-          assert '已验证最终确认页和确认按钮位置' in t
+          assert "clickAt(confirmPoint[0],confirmPoint[1],'最终确认投注')" in t
+          assert 'window.__au10FinalSubmitInProgress' in t
+          assert '已自动点击最终确认按钮' in t
           print('Screenshot-coordinate automation patch verified.')
           PY
           node --check /tmp/au10-automation.js
