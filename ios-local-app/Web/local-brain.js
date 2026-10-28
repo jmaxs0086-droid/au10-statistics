@@ -45,7 +45,7 @@
   }
   function buildMissQueue(history) {
     const entries = (Array.isArray(history) ? history : [])
-      .filter(x => x && /^\\d+$/.test(String(x.issue ?? x.period ?? x.issueNo ?? x.expect ?? '')) &&
+      .filter(x => x && /^\d+$/.test(String(x.issue ?? x.period ?? x.issueNo ?? x.expect ?? '')) &&
         (x.result === 'hit' || x.result === 'miss') && championOf(x) >= 1 && championOf(x) <= 10)
       .map(x => ({ issue: issueOf(x), champion: championOf(x), candidates: candidatesOf(x) }))
       .filter(x => x.issue && x.candidates.length === 6)
