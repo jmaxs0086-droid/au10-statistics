@@ -41,7 +41,14 @@ jobs:
           original = s
 
           s = re.sub(r'<button\b[^>]*id=["\']runScreenshotCoords["\'][^>]*>.*?</button>', '', s, flags=re.I|re.S)
-          s = re.sub(r'<label\b[^>]*>[^<]*自动坐标[^<]*<input\b[^>]*id=["\']autoCoordEnabled["\'][^>]*>.*?</label>', '', s, flags=re.I|re.S)
+          s = re.sub(r'<label\b[^>]*>.*?id=["\']autoCoordEnabled["\'].*?</label>', '', s, flags=re.I|re.S)
+
+          # Removing the controls also requires removing their JavaScript handlers.
+          # Otherwise null.onclick throws before initMenu() and applyBetWebUrl().
+          binding_pattern = r"\$\('autoCoordEnabled'\)\.checked\s*=.*?^\s*\$\('runScreenshotCoords'\)\.onclick\s*=\(\)\s*=>\s*\{.*?^\s*\};\s*"
+          s, binding_count = re.subn(binding_pattern, "", s, count=1, flags=re.S|re.M)
+          if binding_count != 1:
+              raise SystemExit("Could not safely remove stale auto-coordinate UI handlers; refusing to build")
 
           pattern = r'function\s+sendCoordinateAction\s*\([^)]*\)\s*\{.*?\n\s*\}'
           replacement = '''function sendCoordinateAction() {
