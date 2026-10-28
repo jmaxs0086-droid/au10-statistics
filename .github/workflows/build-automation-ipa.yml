@@ -38,6 +38,11 @@ jobs:
           hp = root / "Web/index.html"
           sp = root / "AppDelegate.swift"
           s = hp.read_text(encoding="utf-8")
+          # Use the local AHK-style miss-tail queue as the automatic trigger, not fixed manual tails.
+          s = s.replace("if(newDraw&&automationRunning&&issueTailMatchesCondition(bettingIssue)&&!alreadyTriggered){",
+                        "if(newDraw&&automationRunning&&window.AU10LocalBrain&&window.AU10LocalBrain.canTrigger(bettingIssue)&&!alreadyTriggered){")
+          s = s.replace("pendingIssue===bettingIssue&&issueTailMatchesCondition(pendingIssue))",
+                        "pendingIssue===bettingIssue&&window.AU10LocalBrain&&window.AU10LocalBrain.canTrigger(pendingIssue))")
 
           # Keep the Records screen limited to current candidates plus the last 20 hit/miss rows.
           s = s.replace('<th>期号</th><th>实际冠军</th><th>预测号码</th><th>命中状态</th>',
