@@ -114,7 +114,8 @@
     state.pendingIssue = String(issue);
     state.pendingCandidates = nums;
     state.lastIssue = String(issue);
-    state.queue = state.queue.filter(t => String(t) !== String(issue).slice(-1));
+    // Keep the active trigger tail visible while this issue is pending.
+    // Consume it only after the real result has been settled.
     save();
     return { ok: true, issue: state.pendingIssue, candidates: nums, amount: amount(), step: state.step, queue: state.queue.slice() };
   }
@@ -124,6 +125,8 @@
     const hit = state.pendingCandidates.includes(c);
     const row = { issue: state.pendingIssue, candidates: state.pendingCandidates.slice(), status: hit ? '命中' : '未命中', champion: c, settledAt: Date.now() };
     state.history = [row, ...state.history.filter(x => String(x.issue) !== row.issue)].slice(0, HISTORY_LIMIT);
+    // Consume the triggering tail only at settlement, so display and action share one queue.
+    state.queue = state.queue.filter(t => String(t) !== String(state.pendingIssue).slice(-1));
     state.pendingIssue = '';
     state.pendingCandidates = [];
     if (hit || state.step >= 4) {
