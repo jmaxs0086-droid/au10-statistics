@@ -280,11 +280,21 @@ jobs:
             var frame=document.getElementById('betWebFrame');
             if(!frame||!window.webkit||!window.webkit.messageHandlers||!window.webkit.messageHandlers.au10CoordinateExecutor)return;
             var r=frame.getBoundingClientRect();
-            window.webkit.messageHandlers.au10CoordinateExecutor.postMessage({x:r.left+Number(d.x||0),y:r.top+Number(d.y||0),label:String(d.label||'')});
+            window.webkit.messageHandlers.au10CoordinateExecutor.postMessage({x:r.left+Number(d.x||0),y:r.top+Number(d.y||0),label:String(d.label||''),requestId:String(d.requestId||'')});
           });
           </script>"""
           if 'id="au10-native-coordinate-bridge"' not in s:
               s = s.replace('</body>', coord_native_listener + '\\n</body>', 1)
+          coord_native_result_listener = """<script id="au10-native-coordinate-result-listener">
+          window.addEventListener('message',function(ev){
+            var d=ev.data;
+            if(!d||d.type!=='AU10_NATIVE_TAP_RESULT')return;
+            var el=document.getElementById('betWebUrlStatus');
+            if(el)el.textContent='原生触摸派发状态：'+(d.dispatched?'系统派发调用已执行':'系统派发调用失败')+'；目标控件是否收到事件仍需真机验证。位置：'+String(d.label||'')+'。';
+          });
+          </script>"""
+          if 'id="au10-native-coordinate-result-listener"' not in s:
+              s = s.replace('</body>', coord_native_result_listener + '\\n</body>', 1)
           # Ensure :has() is not needed to hide records-only legacy panels on iOS 15.3.
           s = s.replace("#recordsPanel .tablewrap:has(#historyRows),", "#recordsPanel #historyRows,")
           s = s.replace("#recordsPanel .metrics:has(#simCount),", "#recordsPanel #simCount,")
