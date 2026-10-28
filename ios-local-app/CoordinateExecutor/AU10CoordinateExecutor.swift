@@ -10,6 +10,7 @@
 import Foundation
 import CoreFoundation
 import UIKit
+import WebKit
 import Darwin
 
 @objc(AU10CoordinateExecutor)
@@ -135,5 +136,49 @@ final class AU10CoordinateExecutor: NSObject {
         self.setInteger = unsafeBitCast(setIntegerSym, to: SetIntegerFn.self)
         self.dispatchEvent = unsafeBitCast(dispatchSym, to: DispatchFn.self)
         self.client = createClient(kCFAllocatorDefault)?.takeRetainedValue()
+    }
+}
+
+
+/// WKWebView bridge. It dispatches test taps into the app's own web view geometry.
+/// The final-submit control is deliberately blocked in this experimental build.
+@objc(AU10CoordinateMessageHandler)
+final class AU10CoordinateMessageHandler: NSObject, WKScriptMessageHandler {
+    override init() {
+        super.init()
+        _ = AU10CoordinateExecutor.shared.setEnabled(true)
+    }
+
+    func userContentController(_ userContentController: WKUserContentController,
+                               didReceive message: WKScriptMessage) {
+        guard message.name == "au10CoordinateExecutor",
+              let body = message.body as? [String: Any],
+              let x = body["x"] as? NSNumber,
+              let y = body["y"] as? NSNumber else { return }
+
+        let label = String(describing: body["label"] ?? "")
+        // Keep real-money submission disabled: this handler never injects the final confirmation tap.
+        guard label != "最终确认投注" && label != "final-confirm" else { return }
+
+        DispatchQueue.main.async {
+            guard let webView = Self.findWebView(in: UIApplication.shared) else { return }
+            let pointInWebView = CGPoint(x: CGFloat(truncating: x), y: CGFloat(truncating: y))
+            let pointInWindow = webView.convert(pointInWebView, to: webView.window)
+            _ = AU10CoordinateExecutor.shared.tap(screenX: pointInWindow.x, screenY: pointInWindow.y)
+        }
+    }
+
+    private static func findWebView(in application: UIApplication) -> WKWebView? {
+        func search(_ view: UIView) -> WKWebView? {
+            if let webView = view as? WKWebView { return webView }
+            for child in view.subviews {
+                if let found = search(child) { return found }
+            }
+            return nil
+        }
+        for window in application.windows {
+            if let found = search(window) { return found }
+        }
+        return nil
     }
 }
