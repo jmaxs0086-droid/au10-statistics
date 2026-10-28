@@ -205,7 +205,7 @@ jobs:
           })();
           </script>'''
           if 'id="au10-four-tail-simulation"' not in s:
-              s = s.replace('</body>', strategy_patch + '\\n</body>', 1)
+              s = s.replace('</body>', strategy_patch + '\n</body>', 1)
           if 'id="au10-four-tail-simulation"' not in s:
               raise SystemExit("Could not insert local four-tail simulation tracker")
 
@@ -225,9 +225,16 @@ jobs:
           assert 'if(rows.length<288){' in s
           assert '本地计算未返回有效的六个候选号' in s
           assert 'id="au10-bottom-control-fallback"' in s
+          assert 'id="au10-four-tail-simulation"' in s
+          assert "function predictAt" in s or "predictAt=" in s
+          assert "predictAt(ordered.slice(0,idx),true)" in s
           assert "sendCoordinateAction" in s
           assert "AU10_COORD_ACTION_DISABLED" not in s
           assert s.count("applyBetWebUrl();") >= 2
+          # The calculation must run locally; reject n8n/webhook service dependencies.
+          assert not re.search(r'https?://[^\s\"\']*n8n[^\s\"\']*', s, re.I), "Unexpected n8n URL remains in the app"
+          assert not re.search(r'https?://[^\s\"\']*/webhook/[^\s\"\']*', s, re.I), "Unexpected webhook URL remains in the app"
+          assert "localhost:5678" not in s and "127.0.0.1:5678" not in s
           scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
           pathlib.Path("/tmp/au10-diagnostic.js").write_text("\n".join(scripts), encoding="utf-8")
           print("Validated local coordinate-action code is preserved; bottom controls are fixed.")
