@@ -267,6 +267,12 @@ jobs:
           s = re.sub(r'<style id="au10-records-minimal">.*?</style>',
                      '<style id="au10-records-minimal">#recordsPanel #currentPrediction{margin-bottom:18px}#recordsPanel #resultRows tr td{padding:10px 8px}</style>',
                      s, count=1, flags=re.S)
+          # Replace the handoff-gated block: queue clicks even when iframe loading makes candidate delivery return false.
+          click_handoff_pattern = r"const handedOff=sendCandidatesToBetPage\\(pendingIssue,signal\\.nums\\);\\s*if\\(handedOff\\)\\{\\s*pendingCoordinateAction=\\{issue:pendingIssue,nums:signal\\.nums\\.slice\\(\\)\\};.*?\\}\\s*if\\(handedOff\\)\\{\\s*localStorage\\.setItem\\(AUTO_LAST_TRIGGERED_ISSUE_KEY,pendingIssue\\);\\s*localStorage\\.removeItem\\(pendingKey\\);\\s*\\}"
+          s, n = re.subn(click_handoff_pattern,
+                         "pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};\\n     const handedOff=sendCandidatesToBetPage(pendingIssue,signal.nums);\\n     if(handedOff)resendPendingCandidates();\\n     runPendingCoordinateAction();",
+                         s, count=1, flags=re.S)
+          if n != 1: raise SystemExit("Could not decouple pending clicks from candidate handoff")
           hp.write_text(s, encoding="utf-8")
           (root / "Web/local-brain.js").write_text(brain_text, encoding="utf-8")
 
