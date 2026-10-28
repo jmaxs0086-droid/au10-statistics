@@ -65,7 +65,7 @@ jobs:
           </style>
           """
           if 'id="au10-records-minimal"' not in s:
-              s = s.replace('</head>', minimal_records_css + '\\n</head>', 1)
+              s = s.replace('</head>', minimal_records_css + '\n</head>', 1)
 
           old = """    const autoCoordsEnabled=localStorage.getItem(AUTO_COORD_ACTION_KEY)==='1';
               if(autoCoordsEnabled){
@@ -158,7 +158,7 @@ jobs:
           </style>
           """
           if 'id="au10-current-bet-status-style"' not in s:
-              s = s.replace('</head>', records_status + '\\n</head>', 1)
+              s = s.replace('</head>', records_status + '\n</head>', 1)
           records_script = r"""<script id="au10-records-bet-state">
           (function(){
             function renderAU10BetState(){
@@ -193,7 +193,7 @@ jobs:
           })();
           </script>"""
           if 'id="au10-records-bet-state"' not in s:
-              s = s.replace('</body>', records_script + '\\n</body>', 1)
+              s = s.replace('</body>', records_script + '\n</body>', 1)
           hp.write_text(s, encoding="utf-8")
           (root / "Web/local-brain.js").write_text(brain_text, encoding="utf-8")
 
