@@ -365,16 +365,23 @@ jobs:
 
           scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
           pathlib.Path('/tmp/au10-automation.js').write_text('\n'.join(scripts), encoding='utf-8')
-          assert '0.291,0.421' in s and '0.499,0.941' in s
-          assert 'const autoCoordsEnabled' not in s
-          assert "setAutomationState(!automationRunning)" in s
-          assert 'id="au10-automation-settings-only"' in s
-          assert '确认投注' in t and 'Number.isFinite(x)' in t
-          assert "最终确认投注" in t
-          assert 'window.__au10FinalSubmitInProgress' in t
-          assert '原生坐标执行器已完成前置点击' in t
-          assert 'AU10CoordinateMessageHandler()' in t
-          assert 'au10CoordinateExecutor' in t
+          checks = [
+              ("screenshot coordinate markers", '0.291,0.421' in s and '0.499,0.941' in s),
+              ("legacy autoCoordsEnabled removed", 'const autoCoordsEnabled' not in s),
+              ("automation toggle", "setAutomationState(!automationRunning)" in s),
+              ("settings-only UI", 'id="au10-automation-settings-only"' in s),
+              ("confirmation label and coordinate guard", '确认投注' in t and 'Number.isFinite(x)' in t),
+              ("final confirmation label", "最终确认投注" in t),
+              ("duplicate-submit guard", 'window.__au10FinalSubmitInProgress' in t),
+              ("native executor status message", '原生坐标执行器已完成前置点击' in t),
+              ("native message handler registration", 'AU10CoordinateMessageHandler()' in t),
+              ("native bridge marker", 'au10CoordinateExecutor' in t),
+          ]
+          for name, passed in checks:
+              print(f"VALIDATION {name}: {'PASS' if passed else 'FAIL'}")
+          failed = [name for name, passed in checks if not passed]
+          if failed:
+              raise SystemExit("Validation failed: " + ", ".join(failed))
           print('Screenshot-coordinate automation patch verified.')
           PY
           node --check /tmp/au10-automation.js
