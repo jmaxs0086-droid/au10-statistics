@@ -296,7 +296,126 @@ jobs:
 
           t = sp.read_text(encoding="utf-8")
           # Register a native WKWebView message bridge for coordinate taps.
-          content_matches = list(re.finditer(r'(?m)^(\\s*)(\\w+)\\.userContentController\\s*=\\s*(\\w+)\\s*$', t))
+          content_matches = list(re.finditer(r'(?m)^(\s*)(\w+)\.userContentController\s*=\s*(\w+)\s*)
+          if content_matches:
+              indent, config_name, content_name = content_matches[0].group(1), content_matches[0].group(2), content_matches[0].group(3)
+              line = content_matches[0].group(0)
+              registration = line + "\n" + indent + content_name + '.add(AU10CoordinateMessageHandler(), name: "au10CoordinateExecutor")'
+              t = t.replace(line, registration, 1)
+          else:
+              raise SystemExit("Could not find WKUserContentController assignment for native coordinate bridge")
+          # The coordinate listener must be injected into the cross-origin betting iframe,
+          # not only the app's top-level WKWebView document.
+          t = re.sub(r'forMainFrameOnly:\s*true', 'forMainFrameOnly: false', t)
+          t = t.replace("const report = msg => { try { window.webkit.messageHandlers.betProbe.postMessage({host:location.hostname,title:document.title||'',url:location.origin+location.pathname,controls:[],coordResult:msg,issue:String(d.issue||'')}); } catch(_) {} };",
+                        "const report = msg => { try { window.webkit.messageHandlers.betProbe.postMessage({host:location.hostname,title:document.title||'',url:location.origin+location.pathname,controls:[],coordResult:msg,issue:String(d.issue||'')}); } catch(_) {} try { window.parent.postMessage({type:'AU10_COORD_RESULT',message:String(msg),issue:String(d.issue||'')},'*'); } catch(_) {} };")
+          click_pattern = r"const clickAt = \(x,y,label\) => \{\s*x=Number\(x\); y=Number\(y\);.*?el\.click\(\); return el;\s*\};"
+          new_click = """                  const clickAt = (x,y,label) => {
+                    x=Number(x); y=Number(y);
+                    if (Number.isFinite(x)&&Number.isFinite(y)&&x>=0&&x<=1&&y>=0&&y<=1) { x=Math.round(x*Math.max(1,innerWidth-1)); y=Math.round(y*Math.max(1,innerHeight-1)); }
+                    if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) throw new Error(label+'坐标超出当前网页可视区域；已停止，未继续点击');
+                    const el=document.elementFromPoint(x,y);
+                    if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
+                    try { window.parent.postMessage({type:'AU10_NATIVE_TAP_REQUEST',x,y,label:String(label||'')},'*'); } catch(err) { throw new Error(label+'原生触摸请求发送失败'); }
+                    return el;
+                  };"""
+          t, n = re.subn(click_pattern, new_click, t, count=1, flags=re.S)
+          if n != 1: raise SystemExit("Could not find native coordinate click handler")
+          seq_start = t.index("                    let completed=0;")
+          seq_end = t.index("                  })();", seq_start)
+          new_seq = """                    try { window.parent.postMessage({type:'AU10_COORD_ACK',issue:String(d.issue||''),receivedAt:Date.now()},'*'); } catch(_) {}
+                    let completed=0;
+                    try {
+                      if (coords.reset) {
+                        clickAt(coords.immediate?.[0],coords.immediate?.[1],'打开当前投注确认单'); await wait(500);
+                        clickAt(coords.clear?.[0],coords.clear?.[1],'清空旧选号'); await wait(300);
+                        clickAt(coords.close?.[0],coords.close?.[1],'关闭确认单'); await wait(350);
+                      }
+                      for (const n of nums) { const point=coords.numbers[n-1]; if (!Array.isArray(point)||point.length<2) throw new Error('号码'+n+'没有配置坐标'); clickAt(point[0],point[1],'号码'+n); completed++; await wait(160); }
+                      const amountPoint=coords.amount;
+                      const inputEl=clickAt(amountPoint?.[0],amountPoint?.[1],'金额输入框');
+                      if (!['INPUT','TEXTAREA'].includes(inputEl.tagName) || inputEl.disabled || inputEl.readOnly) throw new Error('金额坐标没有命中可编辑的金额输入框');
+                      inputEl.focus();
+                      const value=String(d.amount||'5');
+                      const proto=Object.getPrototypeOf(inputEl);
+                      const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;
+                      if(setter) setter.call(inputEl,value); else inputEl.value=value;
+                      inputEl.dispatchEvent(new Event('input',{bubbles:true})); inputEl.dispatchEvent(new Event('change',{bubbles:true}));
+                      await wait(250);
+                      if (String(inputEl.value)!==value) throw new Error('金额输入后校验不一致；已停止，未点击下一步');
+                      clickAt(coords.immediate?.[0],coords.immediate?.[1],'立即投注/下一步'); await wait(700);
+                      const confirmPoint=coords.confirm;
+                      if(!Array.isArray(confirmPoint)||confirmPoint.length<2) throw new Error('未配置最终确认按钮坐标；已停止');
+                      const px=Math.round(Number(confirmPoint[0])*Math.max(1,innerWidth-1));
+                      const py=Math.round(Number(confirmPoint[1])*Math.max(1,innerHeight-1));
+                      const hit=document.elementFromPoint(px,py);
+                      if(!hit||!hit.getClientRects().length) throw new Error('最终确认坐标未命中可见网页元素；已停止');
+                      if(window.__au10FinalSubmitInProgress) throw new Error('最终确认已触发，防重复提交保护已阻止再次点击');
+                      window.__au10FinalSubmitInProgress=true;
+                      try {
+                        report('原生坐标执行器已完成前置点击；最终确认提交在测试版本中被安全禁用，未提交订单。');
+                        setTimeout(()=>{window.__au10FinalSubmitInProgress=false;},20000);
+                      } catch(finalErr) {
+                        window.__au10FinalSubmitInProgress=false;
+                        throw finalErr;
+                      }
+                    } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
+          t = t[:seq_start] + new_seq + "\n" + t[seq_end:]
+          sp.write_text(t, encoding="utf-8")
+
+          scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
+          pathlib.Path('/tmp/au10-automation.js').write_text('\n'.join(scripts), encoding='utf-8')
+          assert '0.291,0.421' in s and '0.499,0.941' in s
+          assert 'const autoCoordsEnabled' not in s
+          assert "setAutomationState(!automationRunning)" in s
+          assert 'id="au10-automation-settings-only"' in s
+          assert '确认投注' in t and 'Number.isFinite(x)' in t
+          assert "最终确认投注" in t
+          assert 'window.__au10FinalSubmitInProgress' in t
+          assert '原生坐标执行器已完成前置点击' in t
+          assert 'AU10CoordinateMessageHandler()' in t
+          assert 'AU10_NATIVE_TAP_REQUEST' in s
+          print('Screenshot-coordinate automation patch verified.')
+          PY
+          node --check /tmp/au10-automation.js
+          node --check "$APP_DIR/Web/local-brain.js"
+          grep -q 'id="au10-records-minimal"' "$APP_DIR/Web/index.html"
+          grep -q '<th>候选号码</th><th>命中状态</th>' "$APP_DIR/Web/index.html"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build and package ad-hoc signed IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          # Add the experimental jailbreak HID executor to the XcodeGen source root.
+          cp "$GITHUB_WORKSPACE/ios-local-app/CoordinateExecutor/AU10CoordinateExecutor.swift" "$PWD/AU10CoordinateExecutor.swift"
+          xcodegen generate --spec project.yml
+          xcodebuild -project AU10Local.xcodeproj -scheme AU10Local -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
+          APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -name 'AU10Local.app' -path '*/Build/Products/Release-iphoneos/*' -print -quit)"
+          test -n "$APP_PATH"
+          mkdir -p "$APP_PATH/Web"
+          cp "$GITHUB_WORKSPACE/extracted/au10-statistics-main/ios-local-app/Web/index.html" "$APP_PATH/Web/index.html"
+          cp "$GITHUB_WORKSPACE/$APP_DIR/Web/local-brain.js" "$APP_PATH/Web/local-brain.js"
+          codesign --force --deep --sign - --timestamp=none "$APP_PATH"
+          codesign --verify --deep --strict "$APP_PATH"
+          mkdir -p "$GITHUB_WORKSPACE/package/Payload"
+          cp -R "$APP_PATH" "$GITHUB_WORKSPACE/package/Payload/"
+          cd "$GITHUB_WORKSPACE/package"
+          zip -qr AU10-Automation-adhoc-signed.ipa Payload
+          unzip -t AU10-Automation-adhoc-signed.ipa
+          codesign -dv --verbose=2 Payload/AU10Local.app 2>&1 | grep -E 'Signature=adhoc|Identifier=com.jbd0086.au10local'
+
+      - name: Upload automation IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AU10-Automation-adhoc-signed-IPA
+          path: package/AU10-Automation-adhoc-signed.ipa
+          if-no-files-found: error
+          retention-days: 30
+, t))
           if content_matches:
               indent, config_name, content_name = content_matches[0].group(1), content_matches[0].group(2), content_matches[0].group(3)
               line = content_matches[0].group(0)
