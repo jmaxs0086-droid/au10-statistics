@@ -217,25 +217,25 @@ jobs:
           # Hard fixes applied after all legacy text replacements.
           # Remove the old screenshot-control elements and their event handlers, not just hide them.
           s = re.sub(r'<button id="runScreenshotCoords"[^>]*>.*?</button>', '', s, count=1, flags=re.S)
-          s = re.sub(r'<label[^>]*>\\s*<input id="autoCoordEnabled"[^>]*>.*?</label>', '', s, count=1, flags=re.S)
+          s = re.sub(r'<label[^>]*>\s*<input id="autoCoordEnabled"[^>]*>.*?</label>', '', s, count=1, flags=re.S)
           s = re.sub(r'<div class="small">自动操作使用固定截图坐标.*?</div>', '', s, count=1, flags=re.S)
           s = s.replace("$('autoCoordEnabled').checked=true;", "")
           s = s.replace("$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,'1');});", "")
-          s = re.sub(r"\\$\\('runScreenshotCoords'\\)\\.onclick=\\(\\)=>\\{.*?\\n\\};\\n", "", s, count=1, flags=re.S)
+          s = re.sub(r"\$\('runScreenshotCoords'\)\.onclick=\(\)=>\{.*?\n\};\n", "", s, count=1, flags=re.S)
           # The current target issue should be checked on start as well as after a new draw.
           s = s.replace("if(newDraw&&automationRunning&&window.AU10LocalBrain&&window.AU10LocalBrain.canTrigger(bettingIssue)&&!alreadyTriggered){",
                         "if(automationRunning&&window.AU10LocalBrain&&window.AU10LocalBrain.canTrigger(bettingIssue)&&!alreadyTriggered){")
-          s = s.replace("  const triggerKey=bettingIssue;\\n", "  window.__au10CurrentBetIssue=bettingIssue;\\n  const triggerKey=bettingIssue;\\n")
+          s = s.replace("  const triggerKey=bettingIssue;\n", "  window.__au10CurrentBetIssue=bettingIssue;\n  const triggerKey=bettingIssue;\n")
           # Persist the coordinate task until the betting iframe has finished loading.
-          s = s.replace("function resendPendingCandidates(){\\n const p=window.__au10PendingCandidates;",
-                        "function runPendingCoordinateAction(){\\n const task=pendingCoordinateAction;\\n const frame=$('betWebFrame');\\n if(!task||!automationRunning||!betFrameLoaded||!frame||!frame.contentWindow)return;\\n pendingCoordinateAction=null;\\n localStorage.setItem(AUTO_LAST_TRIGGERED_ISSUE_KEY,String(task.issue));\\n localStorage.removeItem('au10_auto_pending_trigger_issue_v1');\\n if(coordinateActionTimer)clearTimeout(coordinateActionTimer);\\n coordinateActionTimer=setTimeout(()=>{if(automationRunning)sendCoordinateAction(task.issue,task.nums,false);},1200);\\n}\\nfunction resendPendingCandidates(){\\n const p=window.__au10PendingCandidates;")
-          s = s.replace(" if(p&&frame&&frame.contentWindow&&betFrameLoaded){try{frame.contentWindow.postMessage(p,'*');}catch(_){}}\\n}",
-                        " if(p&&frame&&frame.contentWindow&&betFrameLoaded){try{frame.contentWindow.postMessage(p,'*');}catch(_){}}\\n runPendingCoordinateAction();\\n}")
+          s = s.replace("function resendPendingCandidates(){\n const p=window.__au10PendingCandidates;",
+                        "function runPendingCoordinateAction(){\n const task=pendingCoordinateAction;\n const frame=$('betWebFrame');\n if(!task||!automationRunning||!betFrameLoaded||!frame||!frame.contentWindow)return;\n pendingCoordinateAction=null;\n localStorage.setItem(AUTO_LAST_TRIGGERED_ISSUE_KEY,String(task.issue));\n localStorage.removeItem('au10_auto_pending_trigger_issue_v1');\n if(coordinateActionTimer)clearTimeout(coordinateActionTimer);\n coordinateActionTimer=setTimeout(()=>{if(automationRunning)sendCoordinateAction(task.issue,task.nums,false);},1200);\n}\nfunction resendPendingCandidates(){\n const p=window.__au10PendingCandidates;")
+          s = s.replace(" if(p&&frame&&frame.contentWindow&&betFrameLoaded){try{frame.contentWindow.postMessage(p,'*');}catch(_){}}\n}",
+                        " if(p&&frame&&frame.contentWindow&&betFrameLoaded){try{frame.contentWindow.postMessage(p,'*');}catch(_){}}\n runPendingCoordinateAction();\n}")
           s = s.replace("$('betWebFrame').addEventListener('load',()=>{betFrameLoaded=true;resendPendingCandidates();});",
                         "$('betWebFrame').addEventListener('load',()=>{betFrameLoaded=true;resendPendingCandidates();runPendingCoordinateAction();});")
           # Do not gate the coordinate task on candidate-message delivery; those are separate messages.
-          s = s.replace("     const handedOff=sendCandidatesToBetPage(pendingIssue,signal.nums);\\n     if(handedOff){\\n      pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};\\n      if(coordinateActionTimer)clearTimeout(coordinateActionTimer);\\n      coordinateActionTimer=setTimeout(()=>{pendingCoordinateAction=null;sendCoordinateAction(pendingIssue,signal.nums,false);},1200);\\n     }\\n     if(handedOff){\\n      localStorage.setItem(AUTO_LAST_TRIGGERED_ISSUE_KEY,pendingIssue);\\n      localStorage.removeItem(pendingKey);\\n     }",
-                        "     pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};\\n     const handedOff=sendCandidatesToBetPage(pendingIssue,signal.nums);\\n     if(handedOff)resendPendingCandidates();\\n     runPendingCoordinateAction();")
+          s = s.replace("     const handedOff=sendCandidatesToBetPage(pendingIssue,signal.nums);\n     if(handedOff){\n      pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};\n      if(coordinateActionTimer)clearTimeout(coordinateActionTimer);\n      coordinateActionTimer=setTimeout(()=>{pendingCoordinateAction=null;sendCoordinateAction(pendingIssue,signal.nums,false);},1200);\n     }\n     if(handedOff){\n      localStorage.setItem(AUTO_LAST_TRIGGERED_ISSUE_KEY,pendingIssue);\n      localStorage.removeItem(pendingKey);\n     }",
+                        "     pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};\n     const handedOff=sendCandidatesToBetPage(pendingIssue,signal.nums);\n     if(handedOff)resendPendingCandidates();\n     runPendingCoordinateAction();")
           s = s.replace("if(issueEl)issueEl.textContent=state&&state.pendingIssue?String(state.pendingIssue):'等待符合条件的新期';",
                         "if(issueEl)issueEl.textContent=state&&state.pendingIssue?String(state.pendingIssue):(window.__au10CurrentBetIssue||'等待当前期号');")
           # iOS 15.3 lacks :has(), so hide the unwanted records sections by direct element references.
@@ -249,12 +249,12 @@ jobs:
           }trim();setInterval(trim,1000);})();
           </script>"""
           if 'id="au10-records-trim"' not in s:
-              s = s.replace('</body>', records_trim + '\\n</body>', 1)
+              s = s.replace('</body>', records_trim + '\n</body>', 1)
           coord_result_listener = """<script id="au10-coordinate-result-listener">
           window.addEventListener('message',function(ev){var d=ev.data;if(!d||d.type!=='AU10_COORD_RESULT')return;var el=document.getElementById('betWebUrlStatus');if(el)el.textContent='自动化执行反馈（期号 '+String(d.issue||'')+'）：'+String(d.message||'');});
           </script>"""
           if 'id="au10-coordinate-result-listener"' not in s:
-              s = s.replace('</body>', coord_result_listener + '\\n</body>', 1)
+              s = s.replace('</body>', coord_result_listener + '\n</body>', 1)
           # Ensure :has() is not needed to hide records-only legacy panels on iOS 15.3.
           s = s.replace("#recordsPanel .tablewrap:has(#historyRows),", "#recordsPanel #historyRows,")
           s = s.replace("#recordsPanel .metrics:has(#simCount),", "#recordsPanel #simCount,")
