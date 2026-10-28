@@ -187,8 +187,8 @@ jobs:
                       clickAt(coords.immediate?.[0],coords.immediate?.[1],'立即投注/下一步'); await wait(700);
                       const confirmPoint=coords.confirm;
                       const confirmEl=document.elementFromPoint(Math.round(Number(confirmPoint?.[0])*Math.max(1,innerWidth-1)),Math.round(Number(confirmPoint?.[1])*Math.max(1,innerHeight-1)));
-                      const confirmLabel=String((confirmEl&&(confirmEl.innerText||confirmEl.value||confirmEl.getAttribute('aria-label')||confirmEl.title))||'').replace(/\s+/g,'');
-                      const visibleText=String(document.body?.innerText||'').slice(-5000).replace(/\s+/g,'');
+                      const confirmLabel=String((confirmEl&&(confirmEl.innerText||confirmEl.value||confirmEl.getAttribute('aria-label')||confirmEl.title))||'').replace(/\\s+/g,'');
+                      const visibleText=String(document.body?.innerText||'').slice(-5000).replace(/\\s+/g,'');
                       const modalLikely=/(确认投注|确认下注|投注确认|下注确认)/.test(visibleText);
                       if(!confirmEl||!confirmEl.getClientRects().length||!modalLikely||!/(确认|投注|下注)/.test(confirmLabel)) throw new Error('未能验证确认页和确认按钮文字；为防误投，已停止在最终确认前');
                       clickAt(confirmPoint[0],confirmPoint[1],'已验证的确认投注按钮'); await wait(500);
