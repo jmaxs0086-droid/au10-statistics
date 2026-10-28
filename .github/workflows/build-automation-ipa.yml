@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/build-automation-ipa.yml'
       - 'au10-statistics-main.zip'
+      - 'ios-local-app/Web/local-brain.js'
 
 permissions:
   contents: read
