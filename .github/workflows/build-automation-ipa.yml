@@ -39,6 +39,28 @@ jobs:
           sp = root / "AppDelegate.swift"
           s = hp.read_text(encoding="utf-8")
 
+          # Keep the Records screen limited to current candidates plus the last 20 hit/miss rows.
+          s = s.replace('<th>期号</th><th>实际冠军</th><th>预测号码</th><th>命中状态</th>',
+                        '<th>期号</th><th>候选号码</th><th>命中状态</th>')
+          s = s.replace("const row='<tr><td>'+esc(target.issue)+'</td><td>'+pad(actual)+'</td><td>'+q.nums.map(pad).join('、')+'</td><td style=\"color:'+(hit?'#86efac':'#fca5a5')+';font-weight:700\">'+(hit?'命中':'未命中')+'</td></tr>';",
+                        "const row='<tr><td>'+esc(target.issue)+'</td><td>'+q.nums.map(pad).join('、')+'</td><td style=\"color:'+(hit?'#86efac':'#fca5a5')+';font-weight:700\">'+(hit?'命中':'未命中')+'</td></tr>';")
+          s = s.replace('<td colspan="4">历史匹配样本不足，未生成候选号。</td>', '<td colspan="3">历史匹配样本不足，未生成候选号。</td>')
+          s = s.replace('<table><thead><tr><th>期号</th><th>实际冠军</th><th>预测号码</th><th>命中状态</th></tr></thead>',
+                        '<table><thead><tr><th>期号</th><th>候选号码</th><th>命中状态</th></tr></thead>')
+          minimal_records_css = """
+          <style id="au10-records-minimal">
+          #recordsPanel>h2:first-of-type,#recordsPanel>.actions,#recordsPanel>#status,
+          #recordsPanel>h2:nth-of-type(4),#recordsPanel>h2:nth-of-type(5),
+          #recordsPanel>p.small,#recordsPanel .tablewrap:has(#historyRows),
+          #recordsPanel .metrics:has(#simCount),#recordsPanel .actions:has(#simulateRound),
+          #recordsPanel #simStatus,#recordsPanel .tablewrap:has(#simRows){display:none!important}
+          #recordsPanel #currentPrediction{margin-bottom:18px}
+          #recordsPanel #resultRows tr td{padding:10px 8px}
+          </style>
+          """
+          if 'id="au10-records-minimal"' not in s:
+              s = s.replace('</head>', minimal_records_css + '\\n</head>', 1)
+
           old = """    const autoCoordsEnabled=localStorage.getItem(AUTO_COORD_ACTION_KEY)==='1';
               if(autoCoordsEnabled){
                pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};
