@@ -264,6 +264,11 @@ jobs:
           (root / "Web/local-brain.js").write_text(brain_text, encoding="utf-8")
 
           t = sp.read_text(encoding="utf-8")
+          # The coordinate listener must be injected into the cross-origin betting iframe,
+          # not only the app's top-level WKWebView document.
+          t = re.sub(r'forMainFrameOnly:\\s*true', 'forMainFrameOnly: false', t)
+          t = t.replace("const report = msg => { try { window.webkit.messageHandlers.betProbe.postMessage({host:location.hostname,title:document.title||'',url:location.origin+location.pathname,controls:[],coordResult:msg,issue:String(d.issue||'')}); } catch(_) {} };",
+                        "const report = msg => { try { window.webkit.messageHandlers.betProbe.postMessage({host:location.hostname,title:document.title||'',url:location.origin+location.pathname,controls:[],coordResult:msg,issue:String(d.issue||'')}); } catch(_) {} try { window.parent.postMessage({type:'AU10_COORD_RESULT',message:String(msg),issue:String(d.issue||'')},'*'); } catch(_) {} };")
           click_pattern = r"const clickAt = \(x,y,label\) => \{\s*x=Number\(x\); y=Number\(y\);.*?el\.click\(\); return el;\s*\};"
           new_click = """                  const clickAt = (x,y,label) => {
                     x=Number(x); y=Number(y);
