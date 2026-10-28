@@ -44,23 +44,48 @@
     try { root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
   }
   function buildMissQueue(history) {
+    // The prediction result belongs to its own issue. Do not compare an older
+    // row's candidates with the next row's champion: that shifts the tail queue
+    // by one issue and can make Records disagree with the actual miss rows.
     const entries = (Array.isArray(history) ? history : [])
-      .filter(x => x && /^\d+$/.test(String(x.issue ?? x.period ?? x.issueNo ?? x.expect ?? '')) &&
-        (x.result === 'hit' || x.result === 'miss') && championOf(x) >= 1 && championOf(x) <= 10)
-      .map(x => ({ issue: issueOf(x), champion: championOf(x), candidates: candidatesOf(x) }))
-      .filter(x => x.issue && x.candidates.length === 6)
-      .sort((a,b) => cmpIssue(b.issue, a.issue)).slice(0, 21);
-    const missTails = [], seen = new Set();
-    for (let i = 1; i < Math.min(entries.length, 21); i++) {
-      const older = entries[i], newer = entries[i - 1];
-      if (!older.candidates.length || newer.champion < 1 || newer.champion > 10) continue;
-      if (older.candidates.includes(newer.champion)) continue;
-      const tail = Number(older.issue.slice(-1));
-      if (!Number.isInteger(tail) || seen.has(tail)) continue;
-      seen.add(tail);
-      missTails.push(tail);
-      if (missTails.length >= QUEUE_LENGTH && i <= 10) break;
-    }
+      .filter(x => {
+        if (!x) return false;
+        const issue = String(x.issue ?? x.period ?? x.issueNo ?? x.expect ?? '');
+        const result = String(x.result ?? x.status ?? '').trim().toLowerCase();
+        const isMiss = result === 'miss' || result === '未命中' || result === '未中';
+        const isHit = result === 'hit' || result === '命中';
+        return /^\d+$/.test(issue) && (isMiss || isHit) &&
+          championOf(x) >= 1 && championOf(x) <= 10 &&
+          candidatesOf(x).length === 6;
+      })
+      .map(x => {
+        const result = String(x.result ?? x.status ?? '').trim().toLowerCase();
+        return {
+          issue: issueOf(x),
+          champion: championOf(x),
+          candidates: candidatesOf(x),
+          missed: result === 'miss' || result === '未命中' || result === '未中'
+        };
+      })
+      .filter(x => x.issue)
+      .sort((a,b) => cmpIssue(b.issue, a.issue)).slice(0, HISTORY_LIMIT);
+
+    // First inspect the latest 10 settled rows; only expand to 20 when fewer
+    // than four distinct miss tails exist. Display/bet order is oldest -> newest.
+    const collect = limit => {
+      const tails = [], seen = new Set();
+      for (const row of entries.slice(0, limit)) {
+        if (!row.missed) continue;
+        const tail = Number(row.issue.slice(-1));
+        if (!Number.isInteger(tail) || tail < 0 || tail > 9 || seen.has(tail)) continue;
+        seen.add(tail);
+        tails.push(tail);
+        if (tails.length === QUEUE_LENGTH) break;
+      }
+      return tails;
+    };
+    let missTails = collect(10);
+    if (missTails.length < QUEUE_LENGTH) missTails = collect(HISTORY_LIMIT);
     state.queue = missTails.slice(0, QUEUE_LENGTH).reverse();
     save();
     return state.queue.slice();
