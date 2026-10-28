@@ -104,7 +104,7 @@ jobs:
            if(!frame||!frame.contentWindow||!betFrameLoaded){$('betWebUrlStatus').textContent='投注网页未加载，自动操作已停止。';return false;}
            const coords={numbers:[[0.291,0.421],[0.486,0.421],[0.679,0.421],[0.874,0.421],[0.292,0.527],[0.486,0.527],[0.679,0.527],[0.873,0.527],[0.291,0.634],[0.486,0.634]],amount:[0.875,0.828],immediate:[0.823,0.924],clear:[0.925,0.233],close:[0.059,0.233],confirm:[0.499,0.941],reset:true};
            const payload={type:'AU10_COORD_ACTION',issue:String(issue||''),nums:nums.map(Number),amount:getAutoBetAmount(issue),coords};
-           try{frame.contentWindow.postMessage(payload,'*');$('betWebUrlStatus').textContent='已按69/70截图位置发送自动选号、金额填写与确认序列。';return true;}catch(e){$('betWebUrlStatus').textContent='坐标操作请求失败：'+(e.message||e);return false;}
+           try{frame.contentWindow.postMessage(payload,'*');$('betWebUrlStatus').textContent='已发送截图坐标自动选号与金额填写序列；最终提交需手动确认。';return true;}catch(e){$('betWebUrlStatus').textContent='坐标操作请求失败：'+(e.message||e);return false;}
           }
           $('autoCoordEnabled')"""
           s, n = re.subn(pat, lambda m: fn, s, count=1, flags=re.S)
@@ -138,7 +138,7 @@ jobs:
           s = s.replace("$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,$('autoCoordEnabled').checked?'1':'0');$('betWebUrlStatus').textContent=$('autoCoordEnabled').checked?'已启用新期开奖自动坐标操作；仅尝试打开最终确认页。':'已关闭新期开奖自动坐标操作。';});",
                         "$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,'1');});")
           s = s.replace('状态：运行中。每 15 秒检查开奖、生成每期六号码模拟记录，并在开奖结算后核对命中；未启用真实投注。',
-                        '状态：运行中。每15秒检查开奖；符合条件时按69/70标注位置自动选号、填写四档金额并执行确认。')
+                        '状态：运行中。每15秒检查开奖；符合条件时按69/70标注位置自动选号、填写金额并打开最终确认页；最终提交由你手动确认。')
           s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '符合条件的新开奖会触发截图坐标操作；请保持网页布局与标注截图一致。')
           # Bundle the on-device decision core and load it after the existing app script.
           brain = pathlib.Path("/tmp/local-brain.js")
@@ -243,8 +243,7 @@ jobs:
                       const visibleText=String(document.body?.innerText||'').slice(-5000).replace(/\\\\s+/g,'');
                       const modalLikely=/(确认投注|确认下注|投注确认|下注确认)/.test(visibleText);
                       if(!confirmEl||!confirmEl.getClientRects().length||!modalLikely||!/(确认|投注|下注)/.test(confirmLabel)) throw new Error('未能验证确认页和确认按钮文字；为防误投，已停止在最终确认前');
-                      clickAt(confirmPoint[0],confirmPoint[1],'已验证的确认投注按钮'); await wait(900);
-                      report('已执行最终确认按钮点击。请立即核对网页投注回执和投注记录；若网页无明确成功回执，不要重复启动以免重复下注。');
+                      report('已验证最终确认页和确认按钮位置；为避免误投，自动化停在最终提交前，请核对期号、号码和金额后手动点击确认。');
                     } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
           t = t[:seq_start] + new_seq + "\n" + t[seq_end:]
           sp.write_text(t, encoding="utf-8")
@@ -256,8 +255,8 @@ jobs:
           assert "setAutomationState(!automationRunning)" in s
           assert 'id="au10-automation-settings-only"' in s
           assert '确认投注' in t and 'Number.isFinite(x)' in t
-          assert "clickAt(confirmPoint[0],confirmPoint[1],'已验证的确认投注按钮')" in t
-          assert '已执行最终确认按钮点击' in t
+          assert "clickAt(confirmPoint[0],confirmPoint[1],'已验证的确认投注按钮')" not in t
+          assert '已验证最终确认页和确认按钮位置' in t
           print('Screenshot-coordinate automation patch verified.')
           PY
           node --check /tmp/au10-automation.js
