@@ -117,6 +117,8 @@ jobs:
                         "for(const key of keys){const el=$(key);if(el)el.style.display=key===id?(key==='betWebPanel'?'flex':'block'):'none';}", 1)
           s = s.replace('手动按截图坐标选号、填金额10并打开确认页', '按截图坐标自动操作')
           s = s.replace('③ 金额与下注方式', '② 四个金额档位自定义')
+          s = s.replace('① 网页', '① 网页网址')
+          s = s.replace('<input id="tier4" type="number" min="0" step="0.1" value="135">', '<input id="tier4" type="number" min="0" step="0.1" value="90">')
           s = s.replace('保存下注方式', '保存四档金额')
           css = """
           <style id="au10-automation-settings-only">
@@ -126,6 +128,8 @@ jobs:
           #settingsPanel .settingsSection:first-of-type .small{display:none!important}
           #settingsPanel .settingsSection:nth-of-type(3)>p.warning{display:none!important}
           #settingsPanel .settingsSection:nth-of-type(3) .settinggrid>div:not(#tierFields){display:none!important}
+          #settingsPanel .settingsSection:nth-of-type(3)>h2{font-size:1.05rem}
+          #settingsPanel .settingsSection:nth-of-type(3) #betSettingsStatus{margin-top:8px}
           </style>
           """
           if 'id="au10-automation-settings-only"' not in s:
