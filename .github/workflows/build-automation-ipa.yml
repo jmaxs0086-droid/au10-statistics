@@ -165,8 +165,7 @@ jobs:
               try{
                 var panel=document.getElementById('recordsPanel');
                 if(!panel)return;
-                var anchor=panel.querySelector('#currentPrediction')||panel.querySelector('h2');
-                if(!anchor)return;
+                var anchor=panel.querySelector('#currentPrediction')||panel.querySelector('h2')||panel.firstElementChild||panel;
                 var box=document.getElementById('au10-current-bet-status');
                 if(!box){
                   box=document.createElement('section');
@@ -175,12 +174,19 @@ jobs:
                   anchor.parentNode.insertBefore(box,anchor);
                 }
                 var brain=window.AU10LocalBrain;
+                var history=[];
+                try{if(typeof window.loadSimRounds==='function')history=window.loadSimRounds()||[];}catch(e){}
                 var state=brain&&typeof brain.getState==='function'?brain.getState():null;
+                if(brain&&typeof brain.buildMissQueue==='function'&&history.length&&(!state||!Array.isArray(state.queue)||state.queue.length===0)){
+                  try{brain.buildMissQueue(history);state=brain.getState();}catch(e){}
+                }
                 var tails=state&&Array.isArray(state.queue)?state.queue.slice(-4):[];
                 var tailEl=document.getElementById('au10-current-tails');
                 var tierEl=document.getElementById('au10-current-tier');
                 var issueEl=document.getElementById('au10-current-issue');
                 if(tailEl)tailEl.textContent=tails.length?tails.map(function(n){return String(n);}).join('、'):'暂无可用尾数';
+                try{if(typeof window.readBetSettings==='function'&&brain&&typeof brain.setAmounts==='function'){var settings=window.readBetSettings();if(settings&&Array.isArray(settings.tiers)&&settings.tiers.length===4)brain.setAmounts(settings.tiers);}}catch(e){}
+                state=brain&&typeof brain.getState==='function'?brain.getState():state;
                 var step=state&&Number.isInteger(Number(state.step))?Math.max(1,Math.min(4,Number(state.step))):1;
                 var amount=brain&&typeof brain.amount==='function'?brain.amount():((state&&Array.isArray(state.amounts)?state.amounts:[5,15,45,90])[step-1]||0);
                 if(tierEl)tierEl.textContent='第'+step+'档（'+String(amount)+'）';
