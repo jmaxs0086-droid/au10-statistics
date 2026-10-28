@@ -268,7 +268,7 @@ jobs:
                      '<style id="au10-records-minimal">#recordsPanel #currentPrediction{margin-bottom:18px}#recordsPanel #resultRows tr td{padding:10px 8px}</style>',
                      s, count=1, flags=re.S)
           # Replace the handoff-gated block: queue clicks even when iframe loading makes candidate delivery return false.
-          click_handoff_pattern = r"const handedOff=sendCandidatesToBetPage\(pendingIssue,signal\.nums\);\s*if\(handedOff\)\{\s*pendingCoordinateAction=\{issue:pendingIssue,nums:signal\.nums\.slice\(\)\};.*?\}\s*if\(handedOff\)\{\s*localStorage\.setItem\(AUTO_LAST_TRIGGERED_ISSUE_KEY,pendingIssue\);\s*localStorage\.removeItem\(pendingKey\);\s*\}"
+          click_handoff_pattern = r"const handedOff=sendCandidatesToBetPage\(pendingIssue,signal\.nums\);.*?if\(handedOff\)\{\s*localStorage\.setItem\(AUTO_LAST_TRIGGERED_ISSUE_KEY,pendingIssue\);\s*localStorage\.removeItem\(pendingKey\);\s*\}"
           s, n = re.subn(click_handoff_pattern,
                          "pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};\n     const handedOff=sendCandidatesToBetPage(pendingIssue,signal.nums);\n     if(handedOff)resendPendingCandidates();\n     runPendingCoordinateAction();",
                          s, count=1, flags=re.S)
