@@ -398,6 +398,8 @@ jobs:
           cd "$APP_DIR"
           # Add the experimental jailbreak HID executor to the XcodeGen source root.
           cp "$GITHUB_WORKSPACE/ios-local-app/CoordinateExecutor/AU10CoordinateExecutor.swift" "$PWD/AU10CoordinateExecutor.swift"
+          echo "=== project.yml source configuration ==="
+          sed -n '1,180p' project.yml
           xcodegen generate --spec project.yml
           # Fail early unless XcodeGen actually added the native executor to the generated target.
           grep -q 'AU10CoordinateExecutor.swift' AU10Local.xcodeproj/project.pbxproj
