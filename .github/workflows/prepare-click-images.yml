@@ -1,0 +1,25 @@
+name: Prepare click-position images
+on:
+  push:
+    branches: [main]
+    paths:
+      - '点击位置截图.zip'
+      - '.github/workflows/prepare-click-images.yml'
+permissions:
+  contents: read
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract marked screenshots
+        run: |
+          mkdir -p extracted-click-images
+          unzip -o '点击位置截图.zip' -d extracted-click-images
+          find extracted-click-images -type f -maxdepth 3 -print
+      - uses: actions/upload-artifact@v4
+        with:
+          name: click-position-images
+          path: extracted-click-images/
+          if-no-files-found: error
+          retention-days: 1
