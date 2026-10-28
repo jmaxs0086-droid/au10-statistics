@@ -13,7 +13,7 @@
     return Number.isInteger(n) ? n : 0;
   };
   const issueOf = x => String(x && (x.issue ?? x.period ?? x.issueNo ?? x.expect) || '').replace(/\D/g, '');
-  const championOf = x => num(x && (x.champion ?? x.lastDrawChampion ?? x.winner ?? x.resultChampion));
+  const championOf = x => num(x && (x.champion ?? x.actualChampion ?? x.lastDrawChampion ?? x.winner ?? x.resultChampion));
   const candidatesOf = x => {
     const v = x && (x.candidates ?? x.nums ?? x.candidateNumbers);
     if (Array.isArray(v)) return [...new Set(v.map(num).filter(n => n >= 1 && n <= 10))];
