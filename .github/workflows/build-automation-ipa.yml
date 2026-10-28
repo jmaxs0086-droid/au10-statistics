@@ -368,7 +368,7 @@ jobs:
           set -euo pipefail
           cd "$APP_DIR"
           # Add the experimental jailbreak HID executor to the XcodeGen source root.
-          cp "$GITHUB_WORKSPACE/ios-local-app/CoordinateExecutor/AU10CoordinateExecutor.swift" "$APP_DIR/AU10CoordinateExecutor.swift"
+          cp "$GITHUB_WORKSPACE/ios-local-app/CoordinateExecutor/AU10CoordinateExecutor.swift" "$PWD/AU10CoordinateExecutor.swift"
           xcodegen generate --spec project.yml
           xcodebuild -project AU10Local.xcodeproj -scheme AU10Local -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
           APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -name 'AU10Local.app' -path '*/Build/Products/Release-iphoneos/*' -print -quit)"
