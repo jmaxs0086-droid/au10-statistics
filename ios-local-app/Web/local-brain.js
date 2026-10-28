@@ -144,6 +144,20 @@
     save();
     return { settled: true, hit, row, nextStep: state.step, amount: amount(), queue: state.queue.slice() };
   }
+  function completeAction(issue, success) {
+    const id = String(issue || '');
+    if (!id || state.pendingIssue !== id) return false;
+    if (success) {
+      const tail = Number(id.slice(-1));
+      state.queue = state.queue.filter(t => t !== tail);
+    } else {
+      state.pendingIssue = '';
+      state.pendingCandidates = [];
+      state.lastIssue = '';
+    }
+    save();
+    return true;
+  }
   function setPaused(paused) { state.paused = !!paused; save(); return state.paused; }
   function reset() { state = { queue: [], queueVersion: 0, step: 1, lastIssue: '', pendingIssue: '', pendingCandidates: [], history: [], paused: false, amounts: DEFAULT_AMOUNTS.slice() }; save(); }
   function getState() { return JSON.parse(JSON.stringify(state)); }
@@ -195,13 +209,10 @@
         if (result === false) {
           state.pendingIssue = '';
           state.pendingCandidates = [];
-          save();
-        } else {
-          // AHK consumes the triggering tail only after the click sequence is accepted.
-          const tail = Number(String(issue || '').slice(-1));
-          state.queue = state.queue.filter(t => t !== tail);
+          state.lastIssue = '';
           save();
         }
+        // Keep the tail in the visible queue until the iframe reports the final click result.
         return result;
       };
     } else {
@@ -220,7 +231,7 @@
       if (out.settled) appStatus('本地结算：' + (out.hit ? '命中，档位重置' : '未命中') + '；下一档 ' + out.nextStep + '，金额 ' + out.amount + '。');
     }, 2500);
   }
-  root.AU10LocalBrain = Object.freeze({ buildMissQueue, shouldTrigger, canTrigger, begin, settle, amount, setAmounts, setPaused, reset, getState, installIntegration, historyLimit: HISTORY_LIMIT, queueLength: QUEUE_LENGTH });
+  root.AU10LocalBrain = Object.freeze({ buildMissQueue, shouldTrigger, canTrigger, begin, settle, completeAction, amount, setAmounts, setPaused, reset, getState, installIntegration, historyLimit: HISTORY_LIMIT, queueLength: QUEUE_LENGTH });
   if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', installIntegration, { once: true });
   else installIntegration();
 })(window);
