@@ -79,6 +79,10 @@
     if (!id || id === state.lastIssue || !state.queue.length) return false;
     return state.queue.includes(Number(id.slice(-1)));
   }
+  function canTrigger(issue) {
+    if (!state.queue.length) buildMissQueue(appHistory());
+    return shouldTrigger(issue);
+  }
   function begin(issue, candidates) {
     if (!shouldTrigger(issue)) return { ok: false, reason: '本期尾数未触发或自动化已暂停' };
     const nums = candidatesOf({ candidates });
@@ -176,7 +180,7 @@
       if (out.settled) appStatus('本地结算：' + (out.hit ? '命中，档位重置' : '未命中') + '；下一档 ' + out.nextStep + '，金额 ' + out.amount + '。');
     }, 2500);
   }
-  root.AU10LocalBrain = Object.freeze({ buildMissQueue, shouldTrigger, begin, settle, amount, setAmounts, setPaused, reset, getState, installIntegration, historyLimit: HISTORY_LIMIT, queueLength: QUEUE_LENGTH });
+  root.AU10LocalBrain = Object.freeze({ buildMissQueue, shouldTrigger, canTrigger, begin, settle, amount, setAmounts, setPaused, reset, getState, installIntegration, historyLimit: HISTORY_LIMIT, queueLength: QUEUE_LENGTH });
   if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', installIntegration, { once: true });
   else installIntegration();
 })(window);
