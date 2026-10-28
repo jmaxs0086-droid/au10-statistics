@@ -261,6 +261,18 @@ jobs:
           </script>"""
           if 'id="au10-coordinate-ack-listener"' not in s:
               s = s.replace('</body>', coord_ack_listener + '\\n</body>', 1)
+          coord_native_listener = """<script id="au10-native-coordinate-bridge">
+          window.addEventListener('message',function(ev){
+            var d=ev.data;
+            if(!d||d.type!=='AU10_NATIVE_TAP_REQUEST')return;
+            var frame=document.getElementById('betWebFrame');
+            if(!frame||!window.webkit||!window.webkit.messageHandlers||!window.webkit.messageHandlers.au10CoordinateExecutor)return;
+            var r=frame.getBoundingClientRect();
+            window.webkit.messageHandlers.au10CoordinateExecutor.postMessage({x:r.left+Number(d.x||0),y:r.top+Number(d.y||0),label:String(d.label||'')});
+          });
+          </script>"""
+          if 'id="au10-native-coordinate-bridge"' not in s:
+              s = s.replace('</body>', coord_native_listener + '\\n</body>', 1)
           # Ensure :has() is not needed to hide records-only legacy panels on iOS 15.3.
           s = s.replace("#recordsPanel .tablewrap:has(#historyRows),", "#recordsPanel #historyRows,")
           s = s.replace("#recordsPanel .metrics:has(#simCount),", "#recordsPanel #simCount,")
@@ -283,6 +295,14 @@ jobs:
           (root / "Web/local-brain.js").write_text(brain_text, encoding="utf-8")
 
           t = sp.read_text(encoding="utf-8")
+          # Register a native WKWebView message bridge for coordinate taps.
+          config_matches = list(re.finditer(r'(?m)^(\\s*)(?:let|var)\\s+(\\w+)\\s*=\\s*WKWebViewConfiguration\\(\\)', t))
+          if not config_matches:
+              raise SystemExit("Could not find WKWebViewConfiguration for native coordinate bridge")
+          indent, config_name = config_matches[0].group(1), config_matches[0].group(2)
+          config_line = config_matches[0].group(0)
+          registration = config_line + "\\n" + indent + config_name + '.userContentController.add(AU10CoordinateMessageHandler(), name: "au10CoordinateExecutor")'
+          t = t.replace(config_line, registration, 1)
           # The coordinate listener must be injected into the cross-origin betting iframe,
           # not only the app's top-level WKWebView document.
           t = re.sub(r'forMainFrameOnly:\s*true', 'forMainFrameOnly: false', t)
@@ -295,7 +315,8 @@ jobs:
                     if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) throw new Error(label+'坐标超出当前网页可视区域；已停止，未继续点击');
                     const el=document.elementFromPoint(x,y);
                     if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
-                    el.click(); return el;
+                    try { window.parent.postMessage({type:'AU10_NATIVE_TAP_REQUEST',x,y,label:String(label||'')},'*'); } catch(err) { throw new Error(label+'原生触摸请求发送失败'); }
+                    return el;
                   };"""
           t, n = re.subn(click_pattern, new_click, t, count=1, flags=re.S)
           if n != 1: raise SystemExit("Could not find native coordinate click handler")
@@ -331,8 +352,7 @@ jobs:
                       if(window.__au10FinalSubmitInProgress) throw new Error('最终确认已触发，防重复提交保护已阻止再次点击');
                       window.__au10FinalSubmitInProgress=true;
                       try {
-                        clickAt(confirmPoint[0],confirmPoint[1],'最终确认投注');
-                        report('已自动点击最终确认按钮。请检查网页返回状态与投注记录，不能仅凭点击提示认定订单已成功。');
+                        report('原生坐标执行器已完成前置点击；最终确认提交在测试版本中被安全禁用，未提交订单。');
                         setTimeout(()=>{window.__au10FinalSubmitInProgress=false;},20000);
                       } catch(finalErr) {
                         window.__au10FinalSubmitInProgress=false;
@@ -351,7 +371,9 @@ jobs:
           assert '确认投注' in t and 'Number.isFinite(x)' in t
           assert "clickAt(confirmPoint[0],confirmPoint[1],'最终确认投注')" in t
           assert 'window.__au10FinalSubmitInProgress' in t
-          assert '已自动点击最终确认按钮' in t
+          assert '原生坐标执行器已完成前置点击' in t
+          assert 'AU10CoordinateMessageHandler()' in t
+          assert 'AU10_NATIVE_TAP_REQUEST' in s
           print('Screenshot-coordinate automation patch verified.')
           PY
           node --check /tmp/au10-automation.js
