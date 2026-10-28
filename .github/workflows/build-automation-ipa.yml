@@ -297,12 +297,13 @@ jobs:
           t = sp.read_text(encoding="utf-8")
           # Register a native WKWebView message bridge for coordinate taps.
           config_matches = list(re.finditer(r'(?m)^(\\s*)(?:let|var)\\s+(\\w+)\\s*=\\s*WKWebViewConfiguration\\(\\)', t))
-          if not config_matches:
-              raise SystemExit("Could not find WKWebViewConfiguration for native coordinate bridge")
-          indent, config_name = config_matches[0].group(1), config_matches[0].group(2)
-          config_line = config_matches[0].group(0)
-          registration = config_line + "\\n" + indent + config_name + '.userContentController.add(AU10CoordinateMessageHandler(), name: "au10CoordinateExecutor")'
-          t = t.replace(config_line, registration, 1)
+          if config_matches:
+              indent, config_name = config_matches[0].group(1), config_matches[0].group(2)
+              config_line = config_matches[0].group(0)
+              registration = config_line + "\\n" + indent + config_name + '.userContentController.add(AU10CoordinateMessageHandler(), name: "au10CoordinateExecutor")'
+              t = t.replace(config_line, registration, 1)
+          else:
+              print("WKWebView setup lines: " + repr([line for line in t.splitlines() if "WKWebView" in line or "userContentController" in line or "WKUserContentController" in line]))
           # The coordinate listener must be injected into the cross-origin betting iframe,
           # not only the app's top-level WKWebView document.
           t = re.sub(r'forMainFrameOnly:\s*true', 'forMainFrameOnly: false', t)
