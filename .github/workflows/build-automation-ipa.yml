@@ -38,6 +38,9 @@ jobs:
           hp = root / "Web/index.html"
           sp = root / "AppDelegate.swift"
           s = hp.read_text(encoding="utf-8")
+          # Convert accidental literal backslash-n sequences in status messages into JS newline escapes.
+          # This fixes the visible \\n text in the red status panel without changing actual line breaks in the HTML.
+          s = s.replace(r'\\n', r'\n')
           # Use the local AHK-style miss-tail queue as the automatic trigger, not fixed manual tails.
           s = s.replace("if(newDraw&&automationRunning&&issueTailMatchesCondition(bettingIssue)&&!alreadyTriggered){",
                         "if(newDraw&&automationRunning&&window.AU10LocalBrain&&window.AU10LocalBrain.canTrigger(bettingIssue)&&!alreadyTriggered){")
