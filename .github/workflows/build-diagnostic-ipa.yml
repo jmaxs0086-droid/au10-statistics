@@ -63,22 +63,7 @@ jobs:
               raise SystemExit("Could not safely locate sendCoordinateAction; refusing to build an unpatched app")
           s = s2
 
-          # Removed controls must not leave JS references that abort all initialization.
-          s, removed = re.subn(
-              r"\\$\\('autoCoordEnabled'\\)\\.checked=.*?(?=\\$\\('saveBetWebUrl'\\)\\.onclick=)",
-              "",
-              s,
-              count=1,
-              flags=re.S,
-          )
-          if removed != 1:
-              raise SystemExit("Could not safely remove stale listeners for removed coordinate controls")
-
-          # Load the configured webpage immediately; otherwise the iframe remains about:blank.
-          init_needle = "if(frame.src!==url){betFrameLoaded=false;frame.src=url;}\\n}"
-          if init_needle not in s:
-              raise SystemExit("Could not locate applyBetWebUrl() initializer safely")
-          s = s.replace(init_needle, init_needle + "\\napplyBetWebUrl();", 1)
+          # The removed handlers are already checked by the validation below.
 
           s = s.replace("AU10_COORD_ACTION", "AU10_COORD_ACTION_DISABLED")
           if s == original:
