@@ -53,12 +53,13 @@
         const issue = issueOf(x);
         const champion = championOf(x);
         const candidates = candidatesOf(x);
-        if (!/^\\d+$/.test(rawIssue) || !issue || champion < 1 || champion > 10 ||
-            candidates.length !== 6) return null;
-        return { issue, champion, candidates };
+        return {
+          issue,
+          validIssue: /^\\d+$/.test(rawIssue) && !!issue,
+          champion: champion >= 1 && champion <= 10 ? champion : 0,
+          candidates: candidates.length === 6 ? candidates : []
+        };
       })
-      .filter(Boolean)
-      .sort((a,b) => cmpIssue(b.issue, a.issue))
       .slice(0, HISTORY_LIMIT);
 
     const collect = limit => {
@@ -67,7 +68,8 @@
       for (let i = 0; i < transitions; i++) {
         const newer = entries[i];
         const older = entries[i + 1];
-        if (!newer || !older || !newer.champion || older.candidates.length !== 6) continue;
+        if (!newer || !older || !newer.validIssue || !older.validIssue ||
+            !newer.champion || older.candidates.length !== 6) continue;
         if (older.candidates.includes(newer.champion)) continue;
         const tail = Number(older.issue.slice(-1));
         if (!Number.isInteger(tail) || tail < 0 || tail > 9 || seen.has(tail)) continue;
