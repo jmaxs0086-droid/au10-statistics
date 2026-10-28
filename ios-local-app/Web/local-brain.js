@@ -44,34 +44,30 @@
     try { root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
   }
   function buildMissQueue(history) {
-    // The prediction result belongs to its own issue. Do not compare an older
-    // row's candidates with the next row's champion: that shifts the tail queue
-    // by one issue and can make Records disagree with the actual miss rows.
+    // Determine hit/miss from the same issue's candidates and actual champion.
+    // Do not trust a display-only status field, and never shift the champion by one row.
     const entries = (Array.isArray(history) ? history : [])
-      .filter(x => {
-        if (!x) return false;
-        const issue = String(x.issue ?? x.period ?? x.issueNo ?? x.expect ?? '');
-        const result = String(x.result ?? x.status ?? '').trim().toLowerCase();
-        const isMiss = result === 'miss' || result === '未命中' || result === '未中';
-        const isHit = result === 'hit' || result === '命中';
-        return /^\d+$/.test(issue) && (isMiss || isHit) &&
-          championOf(x) >= 1 && championOf(x) <= 10 &&
-          candidatesOf(x).length === 6;
-      })
       .map(x => {
-        const result = String(x.result ?? x.status ?? '').trim().toLowerCase();
+        if (!x) return null;
+        const rawIssue = String(x.issue ?? x.period ?? x.issueNo ?? x.expect ?? '');
+        const issue = issueOf(x);
+        const champion = championOf(x);
+        const candidates = candidatesOf(x);
+        if (!/^\d+$/.test(rawIssue) || !issue || champion < 1 || champion > 10 ||
+            candidates.length !== 6) return null;
         return {
-          issue: issueOf(x),
-          champion: championOf(x),
-          candidates: candidatesOf(x),
-          missed: result === 'miss' || result === '未命中' || result === '未中'
+          issue,
+          champion,
+          candidates,
+          missed: !candidates.includes(champion)
         };
       })
-      .filter(x => x.issue)
-      .sort((a,b) => cmpIssue(b.issue, a.issue)).slice(0, HISTORY_LIMIT);
+      .filter(Boolean)
+      .sort((a,b) => cmpIssue(b.issue, a.issue))
+      .slice(0, HISTORY_LIMIT);
 
-    // First inspect the latest 10 settled rows; only expand to 20 when fewer
-    // than four distinct miss tails exist. Display/bet order is oldest -> newest.
+    // Inspect the latest 10 settled prediction rows first; expand to 20 only
+    // if fewer than four distinct missed issue tails are available.
     const collect = limit => {
       const tails = [], seen = new Set();
       for (const row of entries.slice(0, limit)) {
