@@ -106,13 +106,7 @@ jobs:
           hp.write_text(s, encoding="utf-8")
 
           t = sp.read_text(encoding="utf-8")
-          old_click = """                  const clickAt = (x,y,label) => {
-                    x=Number(x); y=Number(y);
-                    if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) throw new Error(label+'坐标超出当前网页可视区域；已停止，未继续点击');
-                    const el=document.elementFromPoint(x,y);
-                    if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
-                    el.click(); return el;
-                  };"""
+          click_pattern = r"const clickAt = \\(x,y,label\\) => \\{\\s*x=Number\\(x\\); y=Number\\(y\\);.*?el\\.click\\(\\); return el;\\s*\\};"
           new_click = """                  const clickAt = (x,y,label) => {
                     x=Number(x); y=Number(y);
                     if (Number.isFinite(x)&&Number.isFinite(y)&&x>=0&&x<=1&&y>=0&&y<=1) { x=Math.round(x*Math.max(1,innerWidth-1)); y=Math.round(y*Math.max(1,innerHeight-1)); }
@@ -121,25 +115,10 @@ jobs:
                     if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
                     el.click(); return el;
                   };"""
-          if old_click not in t: raise SystemExit("Could not find native coordinate click handler")
-          t = t.replace(old_click, new_click, 1)
-          old_seq = """                    let completed=0;
-                    try {
-                      for (const n of nums) { const point=coords.numbers[n-1]; if (!Array.isArray(point)||point.length<2) throw new Error('号码'+n+'没有配置坐标'); clickAt(point[0],point[1],'号码'+n); completed++; await wait(180); }
-                      const amountPoint=coords.amount;
-                      const inputEl=clickAt(amountPoint?.[0],amountPoint?.[1],'金额输入框');
-                      if (!['INPUT','TEXTAREA'].includes(inputEl.tagName) || inputEl.disabled || inputEl.readOnly) throw new Error('金额坐标没有命中可编辑的金额输入框');
-                      inputEl.focus();
-                      const value=String(d.amount||'10');
-                      const proto=Object.getPrototypeOf(inputEl);
-                      const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;
-                      if(setter) setter.call(inputEl,value); else inputEl.value=value;
-                      inputEl.dispatchEvent(new Event('input',{bubbles:true})); inputEl.dispatchEvent(new Event('change',{bubbles:true}));
-                      await wait(250);
-                      if (String(inputEl.value)!==value) throw new Error('金额输入后校验不一致；已停止，未点击下一步');
-                      clickAt(coords.immediate?.[0],coords.immediate?.[1],'立即投注/下一步');
-                      report('已完成坐标点击尝试：号码点击'+completed+'/6，金额字段校验为'+value+'；已尝试打开下一步页面。请核对实际页面；最终确认投注未点击。');
-                    } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
+          t, n = re.subn(click_pattern, new_click, t, count=1, flags=re.S)
+          if n != 1: raise SystemExit("Could not find native coordinate click handler")
+          seq_start = t.index("                    let completed=0;")
+          seq_end = t.index("                  })();", seq_start)
           new_seq = """                    let completed=0;
                     try {
                       if (coords.reset) {
@@ -163,8 +142,7 @@ jobs:
                       clickAt(coords.confirm?.[0],coords.confirm?.[1],'确认投注'); await wait(500);
                       report('自动坐标序列已执行：号码点击'+completed+'/6，金额字段校验为'+value+'，并已点击确认投注。网站是否接受仍以页面回执/投注记录为准。');
                     } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
-          if old_seq not in t: raise SystemExit("Could not find native coordinate action sequence")
-          t = t.replace(old_seq, new_seq, 1)
+          t = t[:seq_start] + new_seq + "\\n" + t[seq_end:]
           sp.write_text(t, encoding="utf-8")
 
           scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
