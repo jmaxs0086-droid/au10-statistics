@@ -137,6 +137,69 @@ jobs:
               else:
                   s = footer_patch + s
 
+          # Add a separate local-only four-tail progression tracker. It never submits orders.
+          strategy_patch = r'''<script id="au10-four-tail-simulation">
+          (function(){
+            const KEY='au10_four_tail_simulation_v1';
+            const amounts=[5,15,45,90];
+            function loadState(){try{return JSON.parse(localStorage.getItem(KEY)||'null')||{combo:[],step:0,records:[],lastSettledIssue:'',status:'尚未生成组合'};}catch(_){return {combo:[],step:0,records:[],lastSettledIssue:'',status:'尚未生成组合'};}}
+            let state=loadState();
+            function save(){localStorage.setItem(KEY,JSON.stringify(state));render();}
+            function tail(issue){const s=String(issue||'').trim();return /^\\d+$/.test(s)?Number(s.slice(-1)):null;}
+            function brain(){try{const p=predictAt(rows,false);return p&&Array.isArray(p.nums)&&p.nums.length===6?p.nums:null;}catch(_){return null;}}
+            function selectCombo(){
+              const nums=brain(); if(!nums)return {combo:[],window:0,reason:'本地大脑尚未生成有效的 6 个号码'};
+              const excluded=new Set(nums.map(n=>Number(n)===10?0:Number(n)));
+              for(const windowSize of [10,20]){
+                const recent=rows.slice().sort((a,b)=>String(a.issue).localeCompare(String(b.issue),undefined,{numeric:true})).slice(-windowSize);
+                const found=[]; const seen=new Set();
+                for(let i=recent.length-1;i>=0;i--){const t=tail(recent[i].issue);if(t===null||excluded.has(t)||seen.has(t))continue;seen.add(t);found.push({tail:t,issue:String(recent[i].issue)});if(found.length===4)break;}
+                if(found.length===4)return {combo:found.reverse(),window:windowSize,reason:''};
+              }
+              return {combo:[],window:20,reason:'最近 20 期内未找到 4 个符合条件且不重复的期号尾数'};
+            }
+            function generate(){
+              const result=selectCombo();
+              if(result.combo.length!==4){state.status=result.reason;save();return;}
+              state.combo=result.combo;state.step=0;state.status='新组合已生成；按旧到新顺序等待目标期号尾数';
+              state.records.push({time:new Date().toISOString(),type:'新组合',window:result.window,combo:result.combo.map(x=>x.tail),issues:result.combo.map(x=>x.issue),nums:brain(),amount:null,result:'待开始'});
+              if(state.records.length>100)state.records=state.records.slice(-100);
+              save();
+            }
+            function settleLatest(){
+              if(!Array.isArray(rows)||!rows.length||state.combo.length!==4||state.step>=4)return;
+              const latest=rows.slice().sort((a,b)=>String(a.issue).localeCompare(String(b.issue),undefined,{numeric:true})).slice(-1)[0];
+              if(!latest||String(latest.issue)===state.lastSettledIssue)return;
+              const t=tail(latest.issue); if(t===null)return;
+              const target=state.combo[state.step];
+              if(!target||t!==target.tail)return;
+              const nums=brain(); if(!nums)return;
+              const hit=nums.some(n=>(Number(n)===10?0:Number(n))===t);
+              state.records.push({time:new Date().toISOString(),type:'模拟结算',issue:String(latest.issue),tail:t,amount:amounts[state.step],nums,result:hit?'命中':'未命中'});
+              state.lastSettledIssue=String(latest.issue);
+              if(hit){state.status='本档命中；正在重新筛选四个尾数组合';const result=selectCombo();if(result.combo.length===4){state.combo=result.combo;state.step=0;state.status='命中后已重置：新组合从 5 开始';state.records.push({time:new Date().toISOString(),type:'命中后重选',window:result.window,combo:result.combo.map(x=>x.tail),issues:result.combo.map(x=>x.issue),nums:brain(),amount:null,result:'从 5 开始'});}else{state.combo=[];state.step=0;state.status=result.reason;}}
+              else if(state.step===3){state.status='四档均未命中；重新筛选组合并从 5 开始';const result=selectCombo();if(result.combo.length===4){state.combo=result.combo;state.step=0;state.status='四档未中后已重置：新组合从 5 开始';state.records.push({time:new Date().toISOString(),type:'四档未中重选',window:result.window,combo:result.combo.map(x=>x.tail),issues:result.combo.map(x=>x.issue),nums:brain(),amount:null,result:'从 5 开始'});}else{state.combo=[];state.step=0;state.status=result.reason;}}
+              else {state.step++;state.status='本档未命中；等待下一个筛选尾数，模拟金额 '+amounts[state.step]+'（不提交真实订单）';}
+              if(state.records.length>100)state.records=state.records.slice(-100);save();
+            }
+            function render(){
+              let box=document.getElementById('au10FourTailBox');if(!box){const panel=document.getElementById('recordsPanel');if(!panel)return;box=document.createElement('div');box.id='au10FourTailBox';box.className='status';box.style.marginTop='12px';const current=document.getElementById('currentPrediction');if(current&&current.parentElement)current.parentElement.insertBefore(box,current.nextSibling);else panel.prepend(box);}
+              const combo=state.combo.length?state.combo.map((x,i)=>'第'+(i+1)+'档：尾数 '+x.tail+'（历史期号 '+x.issue+'）— 模拟金额 '+amounts[i]).join('<br>'):'暂无有效四尾数组合';
+              const logs=state.records.slice(-8).reverse().map(x=>{const title=x.type==='模拟结算'?'期号 '+(x.issue||'—')+' / 尾数 '+(x.tail??'—')+' / '+(x.amount??'—')+' / '+(x.result||''):x.type+'：'+(x.combo?x.combo.join('、'):'')+' '+(x.result||'');return '<div>'+title+'</div>';}).join('');
+              box.innerHTML='<strong>四尾数策略（仅本地模拟，不提交订单）</strong><br>'+state.status+'<br><br>'+combo+'<br><br><button type="button" id="au10FourTailGenerate">重新筛选四个尾数</button> <button type="button" id="au10FourTailReset">重置模拟进度</button><hr><strong>最近模拟记录</strong><br>'+(logs||'暂无记录');
+              const g=document.getElementById('au10FourTailGenerate'),r=document.getElementById('au10FourTailReset');if(g)g.onclick=generate;if(r)r.onclick=()=>{state={combo:[],step:0,records:[],lastSettledIssue:'',status:'模拟进度已重置'};save();};
+            }
+            function refresh(){if(!state.combo.length)generate();else{settleLatest();render();}}
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',refresh,{once:true});else refresh();
+            const oldAnalyze=window.analyze; if(typeof oldAnalyze==='function')window.analyze=function(){oldAnalyze();refresh();};
+            const oldLatest=window.latest; if(typeof oldLatest==='function')window.latest=function(){const v=oldLatest();Promise.resolve(v).finally(refresh);return v;};
+          })();
+          </script>'''
+          if 'id="au10-four-tail-simulation"' not in s:
+              s = s.replace('</body>', strategy_patch + '\\n</body>', 1)
+          if 'id="au10-four-tail-simulation"' not in s:
+              raise SystemExit("Could not insert local four-tail simulation tracker")
+
           # Do not rewrite sendCoordinateAction or the local prediction/calculation routines.
 
           if s == original:
