@@ -260,6 +260,13 @@ jobs:
           s = s.replace("#recordsPanel .metrics:has(#simCount),", "#recordsPanel #simCount,")
           s = s.replace("#recordsPanel .actions:has(#simulateRound),", "#recordsPanel #simulateRound,")
           s = s.replace("#recordsPanel .tablewrap:has(#simRows)", "#recordsPanel #simRows")
+          # Replace legacy CSS hacks with iOS 15.3-compatible, minimal styling.
+          s = re.sub(r'<style id="au10-automation-settings-only">.*?</style>',
+                     '<style id="au10-automation-settings-only">#settingsPanel .settingsSection:nth-of-type(2),#settingsPanel hr{display:none!important}#settingsPanel .settingsSection:first-of-type .small{display:none!important}#settingsPanel .settingsSection:nth-of-type(3)>p.warning,#settingsPanel .settingsSection:nth-of-type(3) .settinggrid>div:not(#tierFields){display:none!important}#settingsPanel .settingsSection:nth-of-type(3)>h2{font-size:1.05rem}#settingsPanel .settingsSection:nth-of-type(3) #betSettingsStatus{margin-top:8px}</style>',
+                     s, count=1, flags=re.S)
+          s = re.sub(r'<style id="au10-records-minimal">.*?</style>',
+                     '<style id="au10-records-minimal">#recordsPanel #currentPrediction{margin-bottom:18px}#recordsPanel #resultRows tr td{padding:10px 8px}</style>',
+                     s, count=1, flags=re.S)
           hp.write_text(s, encoding="utf-8")
           (root / "Web/local-brain.js").write_text(brain_text, encoding="utf-8")
 
