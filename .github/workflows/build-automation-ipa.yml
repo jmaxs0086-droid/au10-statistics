@@ -148,6 +148,52 @@ jobs:
           brain_text = repo_brain.read_text(encoding="utf-8")
           if "local-brain.js" not in s:
               s = s.replace("</body>", '<script src="local-brain.js"></script>\\n</body>', 1)
+          # Show the current four issue-tail queue and active betting tier on the Records screen.
+          records_status = """
+          <style id="au10-current-bet-status-style">
+          #au10-current-bet-status{margin:0 0 14px;padding:12px;border:1px solid #475569;border-radius:12px;background:rgba(30,41,59,.72);color:#f8fafc}
+          #au10-current-bet-status .bet-status-title{font-weight:700;margin-bottom:8px}
+          #au10-current-bet-status .bet-status-line{font-size:14px;line-height:1.65;overflow-wrap:anywhere}
+          #au10-current-bet-status .bet-status-value{font-weight:700;color:#fde68a}
+          </style>
+          """
+          if 'id="au10-current-bet-status-style"' not in s:
+              s = s.replace('</head>', records_status + '\\n</head>', 1)
+          records_script = r"""<script id="au10-records-bet-state">
+          (function(){
+            function renderAU10BetState(){
+              try{
+                var panel=document.getElementById('recordsPanel');
+                if(!panel)return;
+                var anchor=panel.querySelector('#currentPrediction')||panel.querySelector('h2');
+                if(!anchor)return;
+                var box=document.getElementById('au10-current-bet-status');
+                if(!box){
+                  box=document.createElement('section');
+                  box.id='au10-current-bet-status';
+                  box.innerHTML='<div class="bet-status-title">当前下注信息</div><div class="bet-status-line">期号尾数组合：<span class="bet-status-value" id="au10-current-tails">等待计算</span></div><div class="bet-status-line">当前下注档位：<span class="bet-status-value" id="au10-current-tier">等待计算</span></div><div class="bet-status-line">待下注期号：<span id="au10-current-issue">暂无</span></div>';
+                  anchor.parentNode.insertBefore(box,anchor);
+                }
+                var brain=window.AU10LocalBrain;
+                var state=brain&&typeof brain.getState==='function'?brain.getState():null;
+                var tails=state&&Array.isArray(state.queue)?state.queue.slice(-4):[];
+                var tailEl=document.getElementById('au10-current-tails');
+                var tierEl=document.getElementById('au10-current-tier');
+                var issueEl=document.getElementById('au10-current-issue');
+                if(tailEl)tailEl.textContent=tails.length?tails.map(function(n){return String(n);}).join('、'):'暂无可用尾数';
+                var step=state&&Number.isInteger(Number(state.step))?Math.max(1,Math.min(4,Number(state.step))):1;
+                var amount=brain&&typeof brain.amount==='function'?brain.amount():((state&&Array.isArray(state.amounts)?state.amounts:[5,15,45,90])[step-1]||0);
+                if(tierEl)tierEl.textContent='第'+step+'档（'+String(amount)+'）';
+                if(issueEl)issueEl.textContent=state&&state.pendingIssue?String(state.pendingIssue):'等待符合条件的新期';
+              }catch(e){}
+            }
+            renderAU10BetState();
+            setInterval(renderAU10BetState,1000);
+            document.addEventListener('visibilitychange',renderAU10BetState);
+          })();
+          </script>"""
+          if 'id="au10-records-bet-state"' not in s:
+              s = s.replace('</body>', records_script + '\\n</body>', 1)
           hp.write_text(s, encoding="utf-8")
           (root / "Web/local-brain.js").write_text(brain_text, encoding="utf-8")
 
