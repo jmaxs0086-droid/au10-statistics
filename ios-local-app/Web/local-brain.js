@@ -44,8 +44,9 @@
     try { root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
   }
   function buildMissQueue(history) {
-    // Match AHK exactly: history is newest-first. For each older prediction row,
-    // compare its candidates with the champion of the next newer draw.
+    // Queue source is the same settled candidate hit/miss history shown on Records.
+    // The app stores rounds oldest-first, so sort newest-first before applying the
+    // AHK rule: inspect 10 settled draws, expand to 20 if fewer than four unique misses.
     const entries = (Array.isArray(history) ? history : [])
       .map(x => {
         if (!x) return null;
@@ -53,25 +54,28 @@
         const issue = issueOf(x);
         const champion = championOf(x);
         const candidates = candidatesOf(x);
+        const rawResult = String(x.result ?? x.status ?? '').toLowerCase();
+        let missed = rawResult === 'miss' || rawResult === '未命中' || rawResult === '未中';
+        const hit = rawResult === 'hit' || rawResult === '命中';
+        if (!missed && !hit && champion >= 1 && champion <= 10 && candidates.length === 6) {
+          missed = !candidates.includes(champion);
+        }
         return {
           issue,
           validIssue: /^\\d+$/.test(rawIssue) && !!issue,
-          champion: champion >= 1 && champion <= 10 ? champion : 0,
-          candidates: candidates.length === 6 ? candidates : []
+          candidates,
+          champion,
+          missed
         };
       })
-      .slice(0, HISTORY_LIMIT);
+      .filter(x => x && x.validIssue)
+      .sort((a, b) => cmpIssue(b.issue, a.issue));
 
     const collect = limit => {
       const tails = [], seen = new Set();
-      const transitions = Math.min(limit, entries.length - 1);
-      for (let i = 0; i < transitions; i++) {
-        const newer = entries[i];
-        const older = entries[i + 1];
-        if (!newer || !older || !newer.validIssue || !older.validIssue ||
-            !newer.champion || older.candidates.length !== 6) continue;
-        if (older.candidates.includes(newer.champion)) continue;
-        const tail = Number(older.issue.slice(-1));
+      for (const row of entries.slice(0, limit)) {
+        if (!row.missed) continue;
+        const tail = Number(row.issue.slice(-1));
         if (!Number.isInteger(tail) || tail < 0 || tail > 9 || seen.has(tail)) continue;
         seen.add(tail);
         tails.push(tail);
@@ -80,10 +84,9 @@
       return tails;
     };
 
-    // Inspect 10 recent transitions first; expand to 20 if fewer than four
-    // distinct miss tails were found. The displayed queue is oldest-to-newest.
     let missTails = collect(10);
     if (missTails.length < QUEUE_LENGTH) missTails = collect(HISTORY_LIMIT);
+    // Display/trigger order must be oldest-to-newest, matching the AHK queue.
     state.queue = missTails.slice(0, QUEUE_LENGTH).reverse();
     save();
     return state.queue.slice();
