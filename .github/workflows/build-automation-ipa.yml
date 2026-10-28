@@ -398,8 +398,19 @@ jobs:
           cd "$APP_DIR"
           # Add the experimental jailbreak HID executor to the XcodeGen source root.
           cp "$GITHUB_WORKSPACE/ios-local-app/CoordinateExecutor/AU10CoordinateExecutor.swift" "$PWD/AU10CoordinateExecutor.swift"
-          echo "=== project.yml source configuration ==="
-          sed -n '1,180p' project.yml
+          # XcodeGen only compiles files explicitly listed in this target's sources.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("project.yml")
+          spec = p.read_text(encoding="utf-8")
+          app_delegate = "      - path: AppDelegate.swift\n"
+          executor = "      - path: AU10CoordinateExecutor.swift\n"
+          if executor not in spec:
+              if app_delegate not in spec:
+                  raise SystemExit("Cannot locate target sources list in project.yml")
+              spec = spec.replace(app_delegate, app_delegate + executor, 1)
+              p.write_text(spec, encoding="utf-8")
+          PY
           xcodegen generate --spec project.yml
           # Fail early unless XcodeGen actually added the native executor to the generated target.
           grep -q 'AU10CoordinateExecutor.swift' AU10Local.xcodeproj/project.pbxproj
