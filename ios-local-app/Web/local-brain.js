@@ -125,6 +125,21 @@
   function installIntegration() {
     if (root.__au10LocalBrainInstalled) return;
     root.__au10LocalBrainInstalled = true;
+    try {
+      if (typeof root.readBetSettings === 'function') {
+        const initialSettings = root.readBetSettings();
+        if (initialSettings && Array.isArray(initialSettings.tiers) && initialSettings.tiers.length === 4) setAmounts(initialSettings.tiers);
+      }
+    } catch (_) {}
+    const originalStateSetter = root.setAutomationState;
+    if (typeof originalStateSetter === 'function') {
+      root.setAutomationState = function(running) {
+        const result = originalStateSetter.apply(this, arguments);
+        setPaused(!running);
+        return result;
+      };
+      try { setPaused(root.localStorage.getItem('au10_automation_state_v1') !== 'RUNNING'); } catch (_) {}
+    }
     const original = root.sendCoordinateAction;
     if (typeof original === 'function') {
       root.sendCoordinateAction = function(issue, nums, manual) {
