@@ -154,8 +154,8 @@ jobs:
           s = s.replace("$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,$('autoCoordEnabled').checked?'1':'0');$('betWebUrlStatus').textContent=$('autoCoordEnabled').checked?'已启用新期开奖自动坐标操作；仅尝试打开最终确认页。':'已关闭新期开奖自动坐标操作。';});",
                         "$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,'1');});")
           s = s.replace('状态：运行中。每 15 秒检查开奖、生成每期六号码模拟记录，并在开奖结算后核对命中；未启用真实投注。',
-                        '状态：运行中。每15秒检查开奖；符合条件时按69/70标注位置自动选号、填写金额并尝试自动点击最终确认；订单是否成功以网站返回和投注记录为准。')
-          s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '符合条件的新开奖会触发截图坐标自动操作，包括最终确认按钮；请保持网页布局与标注截图一致，并核验网站订单结果。')
+                        '状态：运行中。每15秒检查开奖；测试版仅验证前置坐标操作与确认页，最终确认提交已禁用。')
+          s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '测试版会尝试前置坐标操作并检查确认页；最终确认提交保持禁用，必须先完成真机触摸与页面布局验收。')
           # Bundle the on-device decision core and load it after the existing app script.
           brain = pathlib.Path("/tmp/local-brain.js")
           repo_brain = pathlib.Path.cwd() / "ios-local-app/Web/local-brain.js"
@@ -328,7 +328,7 @@ jobs:
                     if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) throw new Error(label+'坐标超出当前网页可视区域；已停止，未继续点击');
                     const el=document.elementFromPoint(x,y);
                     if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
-                    try { const bridge=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.au10CoordinateExecutor; if(!bridge||typeof bridge.postMessage!=='function') throw new Error('WKWebView 原生消息处理器未注册'); bridge.postMessage({x,y,label:String(label||'')}); } catch(err) { throw new Error(label+'原生触摸桥接发送失败：'+String(err&&err.message||err)); }
+                    try { if (!window.parent || window.parent === window) throw new Error('未找到承载投注 iframe 的主页面'); window.parent.postMessage({type:'AU10_NATIVE_TAP_REQUEST',x,y,label:String(label||''),requestId:String(Date.now())+'-'+Math.random().toString(36).slice(2)},'*'); } catch(err) { throw new Error(label+'原生触摸请求转发失败：'+String(err&&err.message||err)); }
                     return el;
                   };"""
           t, n = re.subn(click_pattern, new_click, t, count=1, flags=re.S)
