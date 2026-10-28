@@ -107,7 +107,7 @@ jobs:
            if(!frame||!frame.contentWindow||!betFrameLoaded){$('betWebUrlStatus').textContent='投注网页未加载，自动操作已停止。';return false;}
            const coords={numbers:[[0.291,0.421],[0.486,0.421],[0.679,0.421],[0.874,0.421],[0.292,0.527],[0.486,0.527],[0.679,0.527],[0.873,0.527],[0.291,0.634],[0.486,0.634]],amount:[0.875,0.828],immediate:[0.823,0.924],clear:[0.925,0.233],close:[0.059,0.233],confirm:[0.499,0.941],reset:true};
            const payload={type:'AU10_COORD_ACTION',issue:String(issue||''),nums:nums.map(Number),amount:getAutoBetAmount(issue),coords};
-           try{frame.contentWindow.postMessage(payload,'*');$('betWebUrlStatus').textContent='已发送自动选号、金额填写及最终确认序列；请以网站订单记录核验结果。';return true;}catch(e){$('betWebUrlStatus').textContent='坐标操作请求失败：'+(e.message||e);return false;}
+           try{frame.contentWindow.postMessage(payload,'*');$('betWebUrlStatus').textContent='自动化指令已发出，等待投注网页回执；尚未确认执行。';return true;}catch(e){$('betWebUrlStatus').textContent='坐标操作请求失败：'+(e.message||e);return false;}
           }
           $('autoCoordEnabled')"""
           s, n = re.subn(pat, lambda m: fn, s, count=1, flags=re.S)
@@ -255,6 +255,11 @@ jobs:
           </script>"""
           if 'id="au10-coordinate-result-listener"' not in s:
               s = s.replace('</body>', coord_result_listener + '\n</body>', 1)
+          coord_ack_listener = """<script id="au10-coordinate-ack-listener">
+          window.addEventListener('message',function(ev){var d=ev.data;if(!d||d.type!=='AU10_COORD_ACK')return;var el=document.getElementById('betWebUrlStatus');if(el)el.textContent='执行器回执：投注网页已收到期号 '+String(d.issue||'')+' 的任务，正在尝试执行；这不代表任何点击或投注已成功。';});
+          </script>"""
+          if 'id="au10-coordinate-ack-listener"' not in s:
+              s = s.replace('</body>', coord_ack_listener + '\\n</body>', 1)
           # Ensure :has() is not needed to hide records-only legacy panels on iOS 15.3.
           s = s.replace("#recordsPanel .tablewrap:has(#historyRows),", "#recordsPanel #historyRows,")
           s = s.replace("#recordsPanel .metrics:has(#simCount),", "#recordsPanel #simCount,")
@@ -295,7 +300,8 @@ jobs:
           if n != 1: raise SystemExit("Could not find native coordinate click handler")
           seq_start = t.index("                    let completed=0;")
           seq_end = t.index("                  })();", seq_start)
-          new_seq = """                    let completed=0;
+          new_seq = """                    try { window.parent.postMessage({type:'AU10_COORD_ACK',issue:String(d.issue||''),receivedAt:Date.now()},'*'); } catch(_) {}
+                    let completed=0;
                     try {
                       if (coords.reset) {
                         clickAt(coords.immediate?.[0],coords.immediate?.[1],'打开当前投注确认单'); await wait(500);
