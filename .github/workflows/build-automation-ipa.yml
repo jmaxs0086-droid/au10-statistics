@@ -251,7 +251,7 @@ jobs:
           if 'id="au10-records-trim"' not in s:
               s = s.replace('</body>', records_trim + '\n</body>', 1)
           coord_result_listener = """<script id="au10-coordinate-result-listener">
-          window.addEventListener('message',function(ev){var d=ev.data;if(!d||d.type!=='AU10_COORD_RESULT')return;var el=document.getElementById('betWebUrlStatus');if(el)el.textContent='自动化执行反馈（期号 '+String(d.issue||'')+'）：'+String(d.message||'');});
+          window.addEventListener('message',function(ev){var d=ev.data;if(!d||d.type!=='AU10_COORD_RESULT')return;var msg=String(d.message||'');var ok=msg.indexOf('已自动点击最终确认按钮')>=0;try{if(window.AU10LocalBrain&&typeof window.AU10LocalBrain.completeAction==='function')window.AU10LocalBrain.completeAction(d.issue,ok);}catch(e){}var el=document.getElementById('betWebUrlStatus');if(el)el.textContent='自动化执行反馈（期号 '+String(d.issue||'')+'）：'+msg;});
           </script>"""
           if 'id="au10-coordinate-result-listener"' not in s:
               s = s.replace('</body>', coord_result_listener + '\n</body>', 1)
