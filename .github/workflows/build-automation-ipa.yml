@@ -103,7 +103,16 @@ jobs:
           s = s.replace('状态：运行中。每 15 秒检查开奖、生成每期六号码模拟记录，并在开奖结算后核对命中；未启用真实投注。',
                         '状态：运行中。每15秒检查开奖；符合条件时按69/70标注位置自动选号、填写四档金额并执行确认。')
           s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '符合条件的新开奖会触发截图坐标操作；请保持网页布局与标注截图一致。')
+          # Bundle the on-device decision core and load it after the existing app script.
+          brain = pathlib.Path("/tmp/local-brain.js")
+          repo_brain = pathlib.Path.cwd() / "ios-local-app/Web/local-brain.js"
+          if not repo_brain.is_file():
+              raise SystemExit("Missing iOS local brain module")
+          brain_text = repo_brain.read_text(encoding="utf-8")
+          if "local-brain.js" not in s:
+              s = s.replace("</body>", '<script src="local-brain.js"></script>\\n</body>', 1)
           hp.write_text(s, encoding="utf-8")
+          (root / "Web/local-brain.js").write_text(brain_text, encoding="utf-8")
 
           t = sp.read_text(encoding="utf-8")
           click_pattern = r"const clickAt = \(x,y,label\) => \{\s*x=Number\(x\); y=Number\(y\);.*?el\.click\(\); return el;\s*\};"
