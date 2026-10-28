@@ -27,6 +27,7 @@
       const s = JSON.parse(root.localStorage.getItem(KEY) || '{}');
       return {
         queue: Array.isArray(s.queue) ? s.queue.filter(n => Number.isInteger(n) && n >= 0 && n <= 9).slice(-QUEUE_LENGTH) : [],
+        queueVersion: Math.max(0, num(s.queueVersion)),
         step: Math.max(1, Math.min(4, num(s.step) || 1)),
         lastIssue: String(s.lastIssue || ''),
         pendingIssue: String(s.pendingIssue || ''),
@@ -36,7 +37,7 @@
         amounts: Array.isArray(s.amounts) && s.amounts.length === 4 ? s.amounts.map(v => Math.max(0, Number(v) || 0)) : DEFAULT_AMOUNTS.slice()
       };
     } catch (_) {
-      return { queue: [], step: 1, lastIssue: '', pendingIssue: '', pendingCandidates: [], history: [], paused: false, amounts: DEFAULT_AMOUNTS.slice() };
+      return { queue: [], queueVersion: 0, step: 1, lastIssue: '', pendingIssue: '', pendingCandidates: [], history: [], paused: false, amounts: DEFAULT_AMOUNTS.slice() };
     }
   }
   let state = readState();
@@ -88,6 +89,7 @@
     if (missTails.length < QUEUE_LENGTH) missTails = collect(HISTORY_LIMIT);
     // Display/trigger order must be oldest-to-newest, matching the AHK queue.
     state.queue = missTails.slice(0, QUEUE_LENGTH).reverse();
+    state.queueVersion = 2;
     save();
     return state.queue.slice();
   }
@@ -143,7 +145,7 @@
     return { settled: true, hit, row, nextStep: state.step, amount: amount(), queue: state.queue.slice() };
   }
   function setPaused(paused) { state.paused = !!paused; save(); return state.paused; }
-  function reset() { state = { queue: [], step: 1, lastIssue: '', pendingIssue: '', pendingCandidates: [], history: [], paused: false, amounts: DEFAULT_AMOUNTS.slice() }; save(); }
+  function reset() { state = { queue: [], queueVersion: 0, step: 1, lastIssue: '', pendingIssue: '', pendingCandidates: [], history: [], paused: false, amounts: DEFAULT_AMOUNTS.slice() }; save(); }
   function getState() { return JSON.parse(JSON.stringify(state)); }
 
   function appHistory() {
@@ -159,6 +161,9 @@
   function installIntegration() {
     if (root.__au10LocalBrainInstalled) return;
     root.__au10LocalBrainInstalled = true;
+    try {
+      if (state.queueVersion !== 2) buildMissQueue(appHistory());
+    } catch (_) {}
     try {
       if (typeof root.readBetSettings === 'function') {
         const initialSettings = root.readBetSettings();
