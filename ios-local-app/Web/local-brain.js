@@ -156,6 +156,20 @@
   function installIntegration() {
     if (root.__au10LocalBrainInstalled) return;
     root.__au10LocalBrainInstalled = true;
+    // Migration: older builds consumed the trigger tail before settlement.
+    // Restore it for an already-pending issue so Records shows the same active combination.
+    if (state.pendingIssue) {
+      const pendingTail = Number(String(state.pendingIssue).slice(-1));
+      if (Number.isInteger(pendingTail) && pendingTail >= 0 && pendingTail <= 9 && !state.queue.includes(pendingTail)) {
+        const priorQueue = state.queue.slice();
+        buildMissQueue(appHistory());
+        if (!state.queue.includes(pendingTail)) {
+          state.queue = priorQueue.slice(-3);
+          state.queue.push(pendingTail);
+          save();
+        }
+      }
+    }
     try {
       if (typeof root.readBetSettings === 'function') {
         const initialSettings = root.readBetSettings();
