@@ -63,7 +63,7 @@
         }
         return {
           issue,
-          validIssue: /^\\d+$/.test(rawIssue) && !!issue,
+          validIssue: /^\d+$/.test(rawIssue) && !!issue,
           candidates,
           champion,
           missed
