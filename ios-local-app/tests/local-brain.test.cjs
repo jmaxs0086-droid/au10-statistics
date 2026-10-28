@@ -42,6 +42,21 @@ assert.equal(brain.getState().pendingIssue, '202610280105');
 assert.equal(brain.completeAction('202610280105', false), true, 'failed dry-run action can be cleared');
 assert.equal(brain.getState().pendingIssue, '');
 assert.equal(brain.begin('202610280105', [1, 1, 2, 3, 4, 5]).ok, false, 'duplicate candidates are rejected');
+
+// Verify a settled miss advances the tier and a hit resets it.
+assert.equal(brain.begin('202610280105', [1, 2, 3, 4, 5, 6]).ok, true);
+const miss = brain.settle(8, '202610280105', history);
+assert.equal(miss.settled, true);
+assert.equal(miss.hit, false);
+assert.equal(miss.nextStep, 2);
+assert.equal(miss.amount, 20);
+assert.equal(brain.begin('202610280115', [1, 2, 3, 4, 5, 6]).ok, true);
+const hit = brain.settle(3, '202610280115', history);
+assert.equal(hit.settled, true);
+assert.equal(hit.hit, true);
+assert.equal(hit.nextStep, 1);
+assert.equal(hit.amount, 10);
+
 brain.setPaused(true);
 assert.equal(brain.begin('202610280105', [1, 2, 3, 4, 5, 6]).ok, false, 'paused automation cannot begin');
-console.log('PASS: local brain API, miss-tail queue, amount tiers, candidate validation, and pause guard');
+console.log('PASS: local brain API, miss-tail queue, amount tiers, candidate validation, miss/hit settlement, tier progression, and pause guard');
