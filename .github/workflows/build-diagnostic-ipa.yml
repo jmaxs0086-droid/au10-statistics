@@ -66,6 +66,22 @@ jobs:
           if 'grid-template-columns:repeat(3,minmax(0,1fr))' not in s:
               raise SystemExit("Could not update bottom navigation layout")
 
+          # Fix mismatch: predictAt() requires 288 real history rows, not 25.
+          s = s.replace('采集至少 25 期有效开奖历史后，点击“执行分析”生成下一期候选号。',
+                        '采集至少 288 期有效开奖历史后，系统才会生成当前期候选号。', 1)
+          old_guard = "if(rows.length<25){"
+          if old_guard not in s:
+              raise SystemExit("Could not find local analysis history guard")
+          s = s.replace(old_guard, "if(rows.length<288){", 1)
+          s = s.replace("主预测需要至少 25 期有效开奖记录", "本地策略需要至少 288 期有效开奖记录", 1)
+          # Guard against a null prediction result before rendering candidate numbers.
+          old_render = "  const current=predictAt(rows,false);\\n  const last=rows[rows.length-1];"
+          new_render = "  const current=predictAt(rows,false);\\n  if(!current||!Array.isArray(current.nums)||current.nums.length!==6){if(currentBox)currentBox.textContent='本地计算未返回有效的六个候选号。';say('本地计算未返回有效结果；未生成候选号。');return;}\\n  const last=rows[rows.length-1];"
+          if old_render in s:
+              s = s.replace(old_render, new_render, 1)
+          else:
+              raise SystemExit("Could not find local prediction render point")
+
           # Make the existing bottom-control row fixed to the viewport and safe-area aware.
           # The original controls/handlers remain present; no local calculation function is replaced.
           footer_patch = r"""
@@ -133,6 +149,9 @@ jobs:
           import pathlib, re, sys
           s = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
           assert 'id="au10-fixed-bottom-controls"' in s
+          assert '本地策略需要至少 288 期有效开奖记录' in s
+          assert 'if(rows.length<288){' in s
+          assert '本地计算未返回有效的六个候选号' in s
           assert 'id="au10-bottom-control-fallback"' in s
           assert "sendCoordinateAction" in s
           assert "AU10_COORD_ACTION_DISABLED" not in s
