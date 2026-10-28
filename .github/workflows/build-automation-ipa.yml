@@ -374,7 +374,7 @@ jobs:
           assert 'window.__au10FinalSubmitInProgress' in t
           assert '原生坐标执行器已完成前置点击' in t
           assert 'AU10CoordinateMessageHandler()' in t
-          assert 'au10CoordinateExecutor' in s
+          assert 'au10CoordinateExecutor' in t
           print('Screenshot-coordinate automation patch verified.')
           PY
           node --check /tmp/au10-automation.js
