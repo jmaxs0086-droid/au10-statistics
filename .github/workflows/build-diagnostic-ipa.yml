@@ -96,19 +96,17 @@ jobs:
                 var b=e.target && e.target.closest ? e.target.closest('#bottomHome,#bottomBet,#bottomRecords') : null;
                 if(!b) return;
                 if(b.id==='bottomHome'){
+                  if(typeof window.setAutomationState!=='function') return;
                   e.preventDefault();
                   e.stopImmediatePropagation();
                   var start=b.textContent.trim()==='启动' || b.textContent.trim()==='开始';
-                  if(typeof window.setAutomationState==='function') window.setAutomationState(start);
-                  else console.error('[AU10] setAutomationState is unavailable');
+                  window.setAutomationState(start);
                 } else {
+                  if(typeof window.showPanel!=='function') return;
                   e.preventDefault();
                   e.stopImmediatePropagation();
                   var panel=b.id==='bottomBet'?'betWebPanel':'recordsPanel';
-                  if(typeof window.showPanel==='function') window.showPanel(panel);
-                  else {
-                    document.querySelectorAll('[id$="Panel"]').forEach(function(p){p.style.display=p.id===panel?'block':'none';});
-                  }
+                  window.showPanel(panel);
                 }
               },true);
             }
@@ -119,7 +117,7 @@ jobs:
           """
           if 'id="au10-fixed-bottom-controls"' not in s:
               if '</head>' in s:
-                  s = s.replace('</head>', footer_patch + '\\n</head>', 1)
+                  s = s.replace('</head>', footer_patch + '\n</head>', 1)
               else:
                   s = footer_patch + s
 
