@@ -50,6 +50,7 @@ jobs:
           s = s.replace("const row='<tr><td>'+esc(target.issue)+'</td><td>'+pad(actual)+'</td><td>'+q.nums.map(pad).join('、')+'</td><td style=\"color:'+(hit?'#86efac':'#fca5a5')+';font-weight:700\">'+(hit?'命中':'未命中')+'</td></tr>';",
                         "const row='<tr><td>'+esc(target.issue)+'</td><td>'+q.nums.map(pad).join('、')+'</td><td style=\"color:'+(hit?'#86efac':'#fca5a5')+';font-weight:700\">'+(hit?'命中':'未命中')+'</td></tr>';")
           s = s.replace('<td colspan="4">历史匹配样本不足，未生成候选号。</td>', '<td colspan="3">历史匹配样本不足，未生成候选号。</td>')
+          s = s.replace('<td colspan="4">采集开奖并执行分析后显示</td>', '<td colspan="3">采集开奖并执行分析后显示</td>')
           s = s.replace('<table><thead><tr><th>期号</th><th>实际冠军</th><th>预测号码</th><th>命中状态</th></tr></thead>',
                         '<table><thead><tr><th>期号</th><th>候选号码</th><th>命中状态</th></tr></thead>')
           minimal_records_css = """
