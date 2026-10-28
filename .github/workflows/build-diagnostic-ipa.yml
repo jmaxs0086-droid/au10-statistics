@@ -40,28 +40,9 @@ jobs:
           s = p.read_text(encoding="utf-8")
           original = s
 
-          s = re.sub(r'<button\b[^>]*id=["\']runScreenshotCoords["\'][^>]*>.*?</button>', '', s, flags=re.I|re.S)
-          s = re.sub(r'<label\b[^>]*>.*?id=["\']autoCoordEnabled["\'].*?</label>', '', s, flags=re.I|re.S)
-
-          # Removing the controls also requires removing their JavaScript handlers.
-          # Otherwise null.onclick throws before initMenu() and applyBetWebUrl().
-          binding_pattern = r"\$\('autoCoordEnabled'\)\.checked\s*=.*?^\s*\$\('runScreenshotCoords'\)\.onclick\s*=\(\)\s*=>\s*\{.*?^\s*\};\s*"
-          s, binding_count = re.subn(binding_pattern, "", s, count=1, flags=re.S|re.M)
-          if binding_count != 1:
-              raise SystemExit("Could not safely remove stale auto-coordinate UI handlers; refusing to build")
-
-          pattern = r'function\s+sendCoordinateAction\s*\([^)]*\)\s*\{.*?\n\s*\}'
-          replacement = '''function sendCoordinateAction() {
-            console.warn("[AU10] 坐标自动操作已在诊断构建中禁用；请手动操作网页。");
-            return false;
-          }'''
-          s2, n = re.subn(pattern, replacement, s, count=1, flags=re.S)
-          if n == 0:
-              pattern2 = r'(?:const|let|var)\s+sendCoordinateAction\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{.*?\n\s*\};'
-              s2, n = re.subn(pattern2, replacement, s, count=1, flags=re.S)
-          if n == 0:
-              raise SystemExit("Could not safely locate sendCoordinateAction; refusing to build an unpatched app")
-          s = s2
+          # Keep the original coordinate controls and handlers in the DOM so the
+          # existing local calculation and automation code are not disconnected.
+          # Hide only the extra controls visually; the Start/Pause button remains the entry point.
 
           # Bottom-most controls: Start/Pause, Web, Records.
           s = s.replace('grid-template-columns:repeat(4,minmax(0,1fr))', 'grid-template-columns:repeat(3,minmax(0,1fr))')
@@ -85,9 +66,65 @@ jobs:
           if 'grid-template-columns:repeat(3,minmax(0,1fr))' not in s:
               raise SystemExit("Could not update bottom navigation layout")
 
-          # The removed handlers are already checked by the validation below.
+          # Make the existing bottom-control row fixed to the viewport and safe-area aware.
+          # The original controls/handlers remain present; no local calculation function is replaced.
+          footer_patch = r"""
+          <style id="au10-fixed-bottom-controls">
+          body { padding-bottom: calc(84px + env(safe-area-inset-bottom)) !important; }
+          #bottomHome, #bottomBet, #bottomRecords { min-height: 44px; touch-action: manipulation; }
+          label:has(#autoCoordEnabled), #runScreenshotCoords { display: none !important; }
+          </style>
+          <script id="au10-bottom-control-fallback">
+          (function(){
+            function install(){
+              var home=document.getElementById('bottomHome');
+              if(!home || !home.parentElement) return;
+              var bar=home.parentElement;
+              bar.style.position='fixed';
+              bar.style.left='0';
+              bar.style.right='0';
+              bar.style.bottom='0';
+              bar.style.zIndex='2147483000';
+              bar.style.display='grid';
+              bar.style.gridTemplateColumns='repeat(3,minmax(0,1fr))';
+              bar.style.gap='8px';
+              bar.style.padding='8px 12px calc(8px + env(safe-area-inset-bottom))';
+              bar.style.background='rgba(20,20,20,.96)';
+              bar.style.boxSizing='border-box';
+              bar.style.width='100%';
+              document.addEventListener('click',function(e){
+                var b=e.target && e.target.closest ? e.target.closest('#bottomHome,#bottomBet,#bottomRecords') : null;
+                if(!b) return;
+                if(b.id==='bottomHome'){
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  var start=b.textContent.trim()==='启动' || b.textContent.trim()==='开始';
+                  if(typeof window.setAutomationState==='function') window.setAutomationState(start);
+                  else console.error('[AU10] setAutomationState is unavailable');
+                } else {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                  var panel=b.id==='bottomBet'?'betWebPanel':'recordsPanel';
+                  if(typeof window.showPanel==='function') window.showPanel(panel);
+                  else {
+                    document.querySelectorAll('[id$="Panel"]').forEach(function(p){p.style.display=p.id===panel?'block':'none';});
+                  }
+                }
+              },true);
+            }
+            if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',install,{once:true});
+            else install();
+          })();
+          </script>
+          """
+          if 'id="au10-fixed-bottom-controls"' not in s:
+              if '</head>' in s:
+                  s = s.replace('</head>', footer_patch + '\\n</head>', 1)
+              else:
+                  s = footer_patch + s
 
-          s = s.replace("AU10_COORD_ACTION", "AU10_COORD_ACTION_DISABLED")
+          # Do not rewrite sendCoordinateAction or the local prediction/calculation routines.
+
           if s == original:
               raise SystemExit("No source changes detected; refusing to package")
           p.write_text(s, encoding="utf-8")
@@ -97,15 +134,14 @@ jobs:
           python3 - "$HTML_PATH" <<'PY'
           import pathlib, re, sys
           s = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
-          assert "function sendCoordinateAction()" in s
-          assert "return false;" in s
-          assert "AU10_COORD_ACTION</" not in s
-          assert "$('autoCoordEnabled').checked=" not in s
-          assert "$('runScreenshotCoords').onclick=" not in s
+          assert 'id="au10-fixed-bottom-controls"' in s
+          assert 'id="au10-bottom-control-fallback"' in s
+          assert "sendCoordinateAction" in s
+          assert "AU10_COORD_ACTION_DISABLED" not in s
           assert s.count("applyBetWebUrl();") >= 2
           scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
           pathlib.Path("/tmp/au10-diagnostic.js").write_text("\n".join(scripts), encoding="utf-8")
-          print("Validated coordinate sender is disabled.")
+          print("Validated local coordinate-action code is preserved; bottom controls are fixed.")
           PY
           node --check /tmp/au10-diagnostic.js
 
