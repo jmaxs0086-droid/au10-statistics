@@ -63,6 +63,28 @@ jobs:
               raise SystemExit("Could not safely locate sendCoordinateAction; refusing to build an unpatched app")
           s = s2
 
+          # Bottom-most controls: Start/Pause, Web, Records.
+          s = s.replace('grid-template-columns:repeat(4,minmax(0,1fr))', 'grid-template-columns:repeat(3,minmax(0,1fr))')
+          s = s.replace('<button id="bottomHome" type="button" class="secondary">主页</button>', '<button id="bottomHome" type="button" class="secondary">启动</button>')
+          s = s.replace('<button id="bottomSettings" type="button" class="secondary">设置</button>', '')
+          s = s.replace("$('bottomHome').onclick=()=>showPanel('homePanel');", "$('bottomHome').onclick=()=>setAutomationState(!automationRunning);")
+          s = s.replace(" $('bottomSettings').onclick=()=>showPanel('settingsPanel');", "")
+          s = s.replace("const syncBottom=()=>{const toggle=$('bottomToggle');if(toggle){toggle.textContent=automationRunning?'启停：运行中':'启停：暂停';toggle.classList.toggle('danger',automationRunning);}};",
+                        "const syncBottom=()=>{const toggle=$('bottomHome');if(toggle){toggle.textContent=automationRunning?'暂停':'启动';toggle.classList.toggle('danger',automationRunning);toggle.classList.toggle('secondary',!automationRunning);}};")
+          # Preserve legacy data nodes hidden, while showing only the current candidate and hit table.
+          s = re.sub(r'(<section id="recordsPanel"[^>]*>)(.*?)(</section>)',
+                     lambda m: m.group(1) + '<div style="display:none">' +
+                     m.group(2)[:m.group(2).find('<h2>当前期候选号码</h2>')] +
+                     '</div>' +
+                     m.group(2)[m.group(2).find('<h2>当前期候选号码</h2>'):m.group(2).find('<h2>本机历史记录</h2>')] +
+                     '<div style="display:none">' +
+                     m.group(2)[m.group(2).find('<h2>本机历史记录</h2>'):] +
+                     '</div>' + m.group(3), s, count=1, flags=re.S)
+          if 'id="bottomSettings"' in s:
+              raise SystemExit("Settings navigation button was not removed")
+          if 'grid-template-columns:repeat(3,minmax(0,1fr))' not in s:
+              raise SystemExit("Could not update bottom navigation layout")
+
           # The removed handlers are already checked by the validation below.
 
           s = s.replace("AU10_COORD_ACTION", "AU10_COORD_ACTION_DISABLED")
