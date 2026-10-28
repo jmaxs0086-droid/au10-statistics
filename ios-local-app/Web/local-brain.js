@@ -44,8 +44,8 @@
     try { root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
   }
   function buildMissQueue(history) {
-    // Determine hit/miss from the same issue's candidates and actual champion.
-    // Do not trust a display-only status field, and never shift the champion by one row.
+    // Match AHK exactly: history is newest-first. For each older prediction row,
+    // compare its candidates with the champion of the next newer draw.
     const entries = (Array.isArray(history) ? history : [])
       .map(x => {
         if (!x) return null;
@@ -53,26 +53,23 @@
         const issue = issueOf(x);
         const champion = championOf(x);
         const candidates = candidatesOf(x);
-        if (!/^\d+$/.test(rawIssue) || !issue || champion < 1 || champion > 10 ||
+        if (!/^\\d+$/.test(rawIssue) || !issue || champion < 1 || champion > 10 ||
             candidates.length !== 6) return null;
-        return {
-          issue,
-          champion,
-          candidates,
-          missed: !candidates.includes(champion)
-        };
+        return { issue, champion, candidates };
       })
       .filter(Boolean)
       .sort((a,b) => cmpIssue(b.issue, a.issue))
       .slice(0, HISTORY_LIMIT);
 
-    // Inspect the latest 10 settled prediction rows first; expand to 20 only
-    // if fewer than four distinct missed issue tails are available.
     const collect = limit => {
       const tails = [], seen = new Set();
-      for (const row of entries.slice(0, limit)) {
-        if (!row.missed) continue;
-        const tail = Number(row.issue.slice(-1));
+      const transitions = Math.min(limit, entries.length - 1);
+      for (let i = 0; i < transitions; i++) {
+        const newer = entries[i];
+        const older = entries[i + 1];
+        if (!newer || !older || !newer.champion || older.candidates.length !== 6) continue;
+        if (older.candidates.includes(newer.champion)) continue;
+        const tail = Number(older.issue.slice(-1));
         if (!Number.isInteger(tail) || tail < 0 || tail > 9 || seen.has(tail)) continue;
         seen.add(tail);
         tails.push(tail);
@@ -80,6 +77,9 @@
       }
       return tails;
     };
+
+    // Inspect 10 recent transitions first; expand to 20 if fewer than four
+    // distinct miss tails were found. The displayed queue is oldest-to-newest.
     let missTails = collect(10);
     if (missTails.length < QUEUE_LENGTH) missTails = collect(HISTORY_LIMIT);
     state.queue = missTails.slice(0, QUEUE_LENGTH).reverse();
@@ -125,8 +125,6 @@
     const hit = state.pendingCandidates.includes(c);
     const row = { issue: state.pendingIssue, candidates: state.pendingCandidates.slice(), status: hit ? '命中' : '未命中', champion: c, settledAt: Date.now() };
     state.history = [row, ...state.history.filter(x => String(x.issue) !== row.issue)].slice(0, HISTORY_LIMIT);
-    // Consume the triggering tail only at settlement, so display and action share one queue.
-    state.queue = state.queue.filter(t => String(t) !== String(state.pendingIssue).slice(-1));
     state.pendingIssue = '';
     state.pendingCandidates = [];
     if (hit || state.step >= 4) {
@@ -156,20 +154,6 @@
   function installIntegration() {
     if (root.__au10LocalBrainInstalled) return;
     root.__au10LocalBrainInstalled = true;
-    // Migration: older builds consumed the trigger tail before settlement.
-    // Restore it for an already-pending issue so Records shows the same active combination.
-    if (state.pendingIssue) {
-      const pendingTail = Number(String(state.pendingIssue).slice(-1));
-      if (Number.isInteger(pendingTail) && pendingTail >= 0 && pendingTail <= 9 && !state.queue.includes(pendingTail)) {
-        const priorQueue = state.queue.slice();
-        buildMissQueue(appHistory());
-        if (!state.queue.includes(pendingTail)) {
-          state.queue = priorQueue.slice(-3);
-          state.queue.push(pendingTail);
-          save();
-        }
-      }
-    }
     try {
       if (typeof root.readBetSettings === 'function') {
         const initialSettings = root.readBetSettings();
@@ -201,6 +185,11 @@
         if (result === false) {
           state.pendingIssue = '';
           state.pendingCandidates = [];
+          save();
+        } else {
+          // AHK consumes the triggering tail only after the click sequence is accepted.
+          const tail = Number(String(issue || '').slice(-1));
+          state.queue = state.queue.filter(t => t !== tail);
           save();
         }
         return result;
