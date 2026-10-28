@@ -316,7 +316,7 @@ jobs:
                     if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) throw new Error(label+'坐标超出当前网页可视区域；已停止，未继续点击');
                     const el=document.elementFromPoint(x,y);
                     if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
-                    try { window.parent.postMessage({type:'AU10_NATIVE_TAP_REQUEST',x,y,label:String(label||'')},'*'); } catch(err) { throw new Error(label+'原生触摸请求发送失败'); }
+                    try { const bridge=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.au10CoordinateExecutor; if(!bridge||typeof bridge.postMessage!=='function') throw new Error('WKWebView 原生消息处理器未注册'); bridge.postMessage({x,y,label:String(label||'')}); } catch(err) { throw new Error(label+'原生触摸桥接发送失败：'+String(err&&err.message||err)); }
                     return el;
                   };"""
           t, n = re.subn(click_pattern, new_click, t, count=1, flags=re.S)
@@ -393,7 +393,14 @@ jobs:
           # Add the experimental jailbreak HID executor to the XcodeGen source root.
           cp "$GITHUB_WORKSPACE/ios-local-app/CoordinateExecutor/AU10CoordinateExecutor.swift" "$PWD/AU10CoordinateExecutor.swift"
           xcodegen generate --spec project.yml
-          xcodebuild -project AU10Local.xcodeproj -scheme AU10Local -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
+          # Fail early unless XcodeGen actually added the native executor to the generated target.
+          grep -q 'AU10CoordinateExecutor.swift' AU10Local.xcodeproj/project.pbxproj
+          grep -q 'AU10CoordinateMessageHandler' AppDelegate.swift
+          grep -q 'au10CoordinateExecutor' AppDelegate.swift
+          set -o pipefail
+          xcodebuild -project AU10Local.xcodeproj -scheme AU10Local -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$GITHUB_WORKSPACE/xcodebuild-native-bridge.log"
+          # Verify that the executor was compiled, not merely copied into the project directory.
+          grep -E 'SwiftCompile.*AU10CoordinateExecutor.swift|CompileSwift.*AU10CoordinateExecutor.swift' "$GITHUB_WORKSPACE/xcodebuild-native-bridge.log"
           APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -name 'AU10Local.app' -path '*/Build/Products/Release-iphoneos/*' -print -quit)"
           test -n "$APP_PATH"
           mkdir -p "$APP_PATH/Web"
