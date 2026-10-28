@@ -209,6 +209,7 @@ jobs:
           test -n "$APP_PATH"
           mkdir -p "$APP_PATH/Web"
           cp "$GITHUB_WORKSPACE/extracted/au10-statistics-main/ios-local-app/Web/index.html" "$APP_PATH/Web/index.html"
+          cp "$APP_DIR/Web/local-brain.js" "$APP_PATH/Web/local-brain.js"
           codesign --force --deep --sign - --timestamp=none "$APP_PATH"
           codesign --verify --deep --strict "$APP_PATH"
           mkdir -p "$GITHUB_WORKSPACE/package/Payload"
