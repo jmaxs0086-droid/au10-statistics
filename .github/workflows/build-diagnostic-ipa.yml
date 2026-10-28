@@ -256,19 +256,24 @@ jobs:
           mkdir -p "$APP_PATH/Web"
           cp "$GITHUB_WORKSPACE/$HTML_PATH" "$APP_PATH/Web/index.html"
           test -s "$APP_PATH/Web/index.html"
+          # Ad-hoc sign for test installation on a compatible jailbroken device.
+          # This is not an Apple Developer provisioning signature and is not App Store installable.
+          codesign --force --deep --sign - --timestamp=none "$APP_PATH"
+          codesign --verify --deep --strict "$APP_PATH"
           mkdir -p "$GITHUB_WORKSPACE/package/Payload"
           cp -R "$APP_PATH" "$GITHUB_WORKSPACE/package/Payload/"
           test -s "$GITHUB_WORKSPACE/package/Payload/AU10Local.app/Web/index.html"
           cd "$GITHUB_WORKSPACE/package"
-          zip -qr AU10Diagnostic-unsigned.ipa Payload
-          unzip -t AU10Diagnostic-unsigned.ipa
+          zip -qr AU10Diagnostic-adhoc-signed.ipa Payload
+          unzip -t AU10Diagnostic-adhoc-signed.ipa
+          codesign -dv --verbose=2 Payload/AU10Local.app 2>&1 | grep -E 'Signature=adhoc|Identifier=com.jbd0086.au10local'
 
       - name: Upload IPA and patched HTML
         uses: actions/upload-artifact@v4
         with:
-          name: AU10Diagnostic-unsigned-IPA
+          name: AU10Diagnostic-adhoc-signed-IPA
           path: |
-            package/AU10Diagnostic-unsigned.ipa
+            package/AU10Diagnostic-adhoc-signed.ipa
             ${{ env.HTML_PATH }}
           if-no-files-found: error
           retention-days: 30
