@@ -1,0 +1,113 @@
+name: Build AU10 WKWebView diagnostic IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-diagnostic-ipa.yml'
+      - 'au10-statistics-main.zip'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract project archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s au10-statistics-main.zip
+          mkdir -p extracted
+          unzip -q au10-statistics-main.zip -d extracted
+          PROJECT_YML="$(find extracted -path '*/ios-local-app/project.yml' -print -quit)"
+          HTML="$(find extracted -path '*/ios-local-app/Web/index.html' -print -quit)"
+          test -n "$PROJECT_YML"
+          test -n "$HTML"
+          echo "APP_DIR=$(dirname "$PROJECT_YML")" >> "$GITHUB_ENV"
+          echo "HTML_PATH=$HTML" >> "$GITHUB_ENV"
+
+      - name: Patch to diagnostic-only behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$HTML_PATH" <<'PY'
+          import pathlib, re, sys
+          p = pathlib.Path(sys.argv[1])
+          s = p.read_text(encoding="utf-8")
+          original = s
+
+          # Remove UI elements that directly trigger screenshot-coordinate actions.
+          s = re.sub(r'<button\\b[^>]*id=["\\']runScreenshotCoords["\\'][^>]*>.*?</button>', '', s, flags=re.I|re.S)
+          s = re.sub(r'<label\\b[^>]*>[^<]*自动坐标[^<]*<input\\b[^>]*id=["\\']autoCoordEnabled["\\'][^>]*>.*?</label>', '', s, flags=re.I|re.S)
+
+          # Replace the coordinate-action sender with a hard-disabled diagnostic stub.
+          pattern = r'function\\s+sendCoordinateAction\\s*\\([^)]*\\)\\s*\\{.*?\\n\\s*\\}'
+          replacement = '''function sendCoordinateAction() {
+            console.warn("[AU10] 坐标自动操作已在诊断构建中禁用；请手动操作网页。");
+            return false;
+          }'''
+          s2, n = re.subn(pattern, replacement, s, count=1, flags=re.S)
+          if n == 0:
+              # Some versions define it as a const/let arrow function.
+              pattern2 = r'(?:const|let|var)\\s+sendCoordinateAction\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{.*?\\n\\s*\\};'
+              s2, n = re.subn(pattern2, replacement, s, count=1, flags=re.S)
+          if n == 0:
+              raise SystemExit("Could not safely locate sendCoordinateAction; refusing to build an unpatched app")
+          s = s2
+
+          # Remove direct native-message dispatches as a defense in depth.
+          s = s.replace("AU10_COORD_ACTION", "AU10_COORD_ACTION_DISABLED")
+          if s == original:
+              raise SystemExit("No source changes detected; refusing to package")
+          p.write_text(s, encoding="utf-8")
+          print("Patched diagnostic-only HTML:", p)
+          PY
+
+          # Validate the patched source and JavaScript syntax.
+          python3 - "$HTML_PATH" <<'PY'
+          import pathlib, re, sys
+          s = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          assert "function sendCoordinateAction()" in s
+          assert "return false;" in s
+          assert "AU10_COORD_ACTION</" not in s
+          scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
+          pathlib.Path("/tmp/au10-diagnostic.js").write_text("\\n".join(scripts), encoding="utf-8")
+          print("Validated coordinate sender is disabled.")
+          PY
+          node --check /tmp/au10-diagnostic.js
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build unsigned iOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          xcodegen generate --spec project.yml
+          xcodebuild -project AU10Local.xcodeproj -scheme AU10Local -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
+          APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -name 'AU10Local.app' -path '*/Build/Products/Release-iphoneos/*' -print -quit)"
+          test -n "$APP_PATH"
+          mkdir -p "$APP_PATH/Web"
+          cp "$HTML_PATH" "$APP_PATH/Web/index.html"
+          test -s "$APP_PATH/Web/index.html"
+          mkdir -p "$GITHUB_WORKSPACE/package/Payload"
+          cp -R "$APP_PATH" "$GITHUB_WORKSPACE/package/Payload/"
+          test -s "$GITHUB_WORKSPACE/package/Payload/AU10Local.app/Web/index.html"
+          cd "$GITHUB_WORKSPACE/package"
+          zip -qr AU10Diagnostic-unsigned.ipa Payload
+          unzip -t AU10Diagnostic-unsigned.ipa
+
+      - name: Upload IPA and patched HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: AU10Diagnostic-unsigned-IPA
+          path: |
+            package/AU10Diagnostic-unsigned.ipa
+            ${{ env.HTML_PATH }}
+          if-no-files-found: error
+          retention-days: 30
