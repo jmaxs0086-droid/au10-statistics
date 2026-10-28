@@ -187,6 +187,9 @@ jobs:
           print('Screenshot-coordinate automation patch verified.')
           PY
           node --check /tmp/au10-automation.js
+          node --check "$APP_DIR/Web/local-brain.js"
+          grep -q 'id="au10-records-minimal"' "$APP_DIR/Web/index.html"
+          grep -q '<th>候选号码</th><th>命中状态</th>' "$APP_DIR/Web/index.html"
 
       - name: Install XcodeGen
         run: brew install xcodegen
