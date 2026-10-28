@@ -320,13 +320,7 @@ jobs:
                       const px=Math.round(Number(confirmPoint[0])*Math.max(1,innerWidth-1));
                       const py=Math.round(Number(confirmPoint[1])*Math.max(1,innerHeight-1));
                       const hit=document.elementFromPoint(px,py);
-                      const confirmEl=hit&&(hit.closest('button,input[type="button"],input[type="submit"],[role="button"],a')||hit);
-                      const confirmLabel=String((confirmEl&&(confirmEl.innerText||confirmEl.value||confirmEl.getAttribute('aria-label')||confirmEl.title))||'').replace(/\\\\s+/g,'');
-                      const visibleText=String(document.body?.innerText||'').slice(-5000).replace(/\\\\s+/g,'');
-                      const modalLikely=/(确认投注|确认下注|投注确认|下注确认)/.test(visibleText);
-                      const isVisible=!!(confirmEl&&confirmEl.getClientRects().length&&getComputedStyle(confirmEl).visibility!=='hidden'&&getComputedStyle(confirmEl).display!=='none');
-                      const isEnabled=!!(confirmEl&&!confirmEl.disabled&&confirmEl.getAttribute('aria-disabled')!=='true');
-                      if(!isVisible||!isEnabled||!modalLikely||!/(确认|投注|下注)/.test(confirmLabel)) throw new Error('未能验证确认页、按钮文字或按钮状态；已停止，未提交');
+                      if(!hit||!hit.getClientRects().length) throw new Error('最终确认坐标未命中可见网页元素；已停止');
                       if(window.__au10FinalSubmitInProgress) throw new Error('最终确认已触发，防重复提交保护已阻止再次点击');
                       window.__au10FinalSubmitInProgress=true;
                       try {
