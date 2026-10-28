@@ -87,7 +87,7 @@ jobs:
           APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -name 'AU10Local.app' -path '*/Build/Products/Release-iphoneos/*' -print -quit)"
           test -n "$APP_PATH"
           mkdir -p "$APP_PATH/Web"
-          cp "$HTML_PATH" "$APP_PATH/Web/index.html"
+          cp "$GITHUB_WORKSPACE/$HTML_PATH" "$APP_PATH/Web/index.html"
           test -s "$APP_PATH/Web/index.html"
           mkdir -p "$GITHUB_WORKSPACE/package/Payload"
           cp -R "$APP_PATH" "$GITHUB_WORKSPACE/package/Payload/"
