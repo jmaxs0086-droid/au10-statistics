@@ -1,0 +1,28 @@
+name: Test AU10 local brain
+
+on:
+  push:
+    branches:
+      - 'qa/local-brain-step2'
+    paths:
+      - 'ios-local-app/Web/local-brain.js'
+      - 'ios-local-app/tests/local-brain.test.cjs'
+      - '.github/workflows/test-local-brain.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-brain-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check local brain
+        run: node --check ios-local-app/Web/local-brain.js
+      - name: Run regression tests (mock WebView; no website access)
+        run: node ios-local-app/tests/local-brain.test.cjs

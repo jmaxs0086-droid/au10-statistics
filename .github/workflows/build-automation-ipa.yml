@@ -8,6 +8,7 @@ on:
       - 'au10-statistics-main.zip'
       - 'ios-local-app/Web/local-brain.js'
       - 'ios-local-app/CoordinateExecutor/AU10CoordinateExecutor.swift'
+      - 'ios-local-app/tests/local-brain.test.cjs'
 
 permissions:
   contents: read
@@ -17,6 +18,17 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Node.js for local-brain tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check local-brain syntax
+        run: node --check ios-local-app/Web/local-brain.js
+
+      - name: Run local-brain regression tests (mock environment only)
+        run: node ios-local-app/tests/local-brain.test.cjs
 
       - name: Extract original project
         shell: bash
@@ -142,8 +154,8 @@ jobs:
           s = s.replace("$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,$('autoCoordEnabled').checked?'1':'0');$('betWebUrlStatus').textContent=$('autoCoordEnabled').checked?'已启用新期开奖自动坐标操作；仅尝试打开最终确认页。':'已关闭新期开奖自动坐标操作。';});",
                         "$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,'1');});")
           s = s.replace('状态：运行中。每 15 秒检查开奖、生成每期六号码模拟记录，并在开奖结算后核对命中；未启用真实投注。',
-                        '状态：运行中。每15秒检查开奖；符合条件时按69/70标注位置自动选号、填写金额并尝试自动点击最终确认；订单是否成功以网站返回和投注记录为准。')
-          s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '符合条件的新开奖会触发截图坐标自动操作，包括最终确认按钮；请保持网页布局与标注截图一致，并核验网站订单结果。')
+                        '状态：运行中。每15秒检查开奖；测试版仅验证前置坐标操作与确认页，最终确认提交已禁用。')
+          s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '测试版会尝试前置坐标操作并检查确认页；最终确认提交保持禁用，必须先完成真机触摸与页面布局验收。')
           # Bundle the on-device decision core and load it after the existing app script.
           brain = pathlib.Path("/tmp/local-brain.js")
           repo_brain = pathlib.Path.cwd() / "ios-local-app/Web/local-brain.js"
@@ -260,7 +272,7 @@ jobs:
           window.addEventListener('message',function(ev){var d=ev.data;if(!d||d.type!=='AU10_COORD_ACK')return;var el=document.getElementById('betWebUrlStatus');if(el)el.textContent='执行器回执：投注网页已收到期号 '+String(d.issue||'')+' 的任务，正在尝试执行；这不代表任何点击或投注已成功。';});
           </script>"""
           if 'id="au10-coordinate-ack-listener"' not in s:
-              s = s.replace('</body>', coord_ack_listener + '\\n</body>', 1)
+              s = s.replace('</body>', coord_ack_listener + '\n</body>', 1)
           coord_native_listener = """<script id="au10-native-coordinate-bridge">
           window.addEventListener('message',function(ev){
             var d=ev.data;
@@ -268,11 +280,21 @@ jobs:
             var frame=document.getElementById('betWebFrame');
             if(!frame||!window.webkit||!window.webkit.messageHandlers||!window.webkit.messageHandlers.au10CoordinateExecutor)return;
             var r=frame.getBoundingClientRect();
-            window.webkit.messageHandlers.au10CoordinateExecutor.postMessage({x:r.left+Number(d.x||0),y:r.top+Number(d.y||0),label:String(d.label||'')});
+            window.webkit.messageHandlers.au10CoordinateExecutor.postMessage({x:r.left+Number(d.x||0),y:r.top+Number(d.y||0),label:String(d.label||''),requestId:String(d.requestId||'')});
           });
           </script>"""
           if 'id="au10-native-coordinate-bridge"' not in s:
-              s = s.replace('</body>', coord_native_listener + '\\n</body>', 1)
+              s = s.replace('</body>', coord_native_listener + '\n</body>', 1)
+          coord_native_result_listener = """<script id="au10-native-coordinate-result-listener">
+          window.addEventListener('message',function(ev){
+            var d=ev.data;
+            if(!d||d.type!=='AU10_NATIVE_TAP_RESULT')return;
+            var el=document.getElementById('betWebUrlStatus');
+            if(el)el.textContent='原生触摸派发状态：'+(d.dispatched?'系统派发调用已执行':'系统派发调用失败')+'；目标控件是否收到事件仍需真机验证。位置：'+String(d.label||'')+'。';
+          });
+          </script>"""
+          if 'id="au10-native-coordinate-result-listener"' not in s:
+              s = s.replace('</body>', coord_native_result_listener + '\n</body>', 1)
           # Ensure :has() is not needed to hide records-only legacy panels on iOS 15.3.
           s = s.replace("#recordsPanel .tablewrap:has(#historyRows),", "#recordsPanel #historyRows,")
           s = s.replace("#recordsPanel .metrics:has(#simCount),", "#recordsPanel #simCount,")
@@ -316,7 +338,7 @@ jobs:
                     if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) throw new Error(label+'坐标超出当前网页可视区域；已停止，未继续点击');
                     const el=document.elementFromPoint(x,y);
                     if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
-                    try { const bridge=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.au10CoordinateExecutor; if(!bridge||typeof bridge.postMessage!=='function') throw new Error('WKWebView 原生消息处理器未注册'); bridge.postMessage({x,y,label:String(label||'')}); } catch(err) { throw new Error(label+'原生触摸桥接发送失败：'+String(err&&err.message||err)); }
+                    try { if (!window.parent || window.parent === window) throw new Error('未找到承载投注 iframe 的主页面'); window.parent.postMessage({type:'AU10_NATIVE_TAP_REQUEST',x,y,label:String(label||''),requestId:String(Date.now())+'-'+Math.random().toString(36).slice(2)},'*'); } catch(err) { throw new Error(label+'原生触摸请求转发失败：'+String(err&&err.message||err)); }
                     return el;
                   };"""
           t, n = re.subn(click_pattern, new_click, t, count=1, flags=re.S)
