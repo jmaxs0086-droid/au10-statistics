@@ -185,7 +185,13 @@ jobs:
                       await wait(250);
                       if (String(inputEl.value)!==value) throw new Error('金额输入后校验不一致；已停止，未点击下一步');
                       clickAt(coords.immediate?.[0],coords.immediate?.[1],'立即投注/下一步'); await wait(700);
-                      clickAt(coords.confirm?.[0],coords.confirm?.[1],'确认投注'); await wait(500);
+                      const confirmPoint=coords.confirm;
+                      const confirmEl=document.elementFromPoint(Math.round(Number(confirmPoint?.[0])*Math.max(1,innerWidth-1)),Math.round(Number(confirmPoint?.[1])*Math.max(1,innerHeight-1)));
+                      const confirmLabel=String((confirmEl&&(confirmEl.innerText||confirmEl.value||confirmEl.getAttribute('aria-label')||confirmEl.title))||'').replace(/\s+/g,'');
+                      const visibleText=String(document.body?.innerText||'').slice(-5000).replace(/\s+/g,'');
+                      const modalLikely=/(确认投注|确认下注|投注确认|下注确认)/.test(visibleText);
+                      if(!confirmEl||!confirmEl.getClientRects().length||!modalLikely||!/(确认|投注|下注)/.test(confirmLabel)) throw new Error('未能验证确认页和确认按钮文字；为防误投，已停止在最终确认前');
+                      clickAt(confirmPoint[0],confirmPoint[1],'已验证的确认投注按钮'); await wait(500);
                       report('自动坐标序列已执行：号码点击'+completed+'/6，金额字段校验为'+value+'，并已点击确认投注。网站是否接受仍以页面回执/投注记录为准。');
                     } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
           t = t[:seq_start] + new_seq + "\\n" + t[seq_end:]
