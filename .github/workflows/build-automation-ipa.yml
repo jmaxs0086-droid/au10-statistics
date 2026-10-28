@@ -1,0 +1,210 @@
+name: Build AU10 automation IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-automation-ipa.yml'
+      - 'au10-statistics-main.zip'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract original project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s au10-statistics-main.zip
+          mkdir -p extracted
+          unzip -q au10-statistics-main.zip -d extracted
+          PROJECT_YML="$(find extracted -path '*/ios-local-app/project.yml' -print -quit)"
+          test -n "$PROJECT_YML"
+          echo "APP_DIR=$(dirname "$PROJECT_YML")" >> "$GITHUB_ENV"
+
+      - name: Apply screenshot-coordinate automation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$APP_DIR" <<'PY'
+          import pathlib, re, sys
+          root = pathlib.Path(sys.argv[1])
+          hp = root / "Web/index.html"
+          sp = root / "AppDelegate.swift"
+          s = hp.read_text(encoding="utf-8")
+
+          old = """    const autoCoordsEnabled=localStorage.getItem(AUTO_COORD_ACTION_KEY)==='1';
+              if(autoCoordsEnabled){
+               pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};
+               if(handedOff){
+                if(coordinateActionTimer)clearTimeout(coordinateActionTimer);
+                coordinateActionTimer=setTimeout(()=>{pendingCoordinateAction=null;sendCoordinateAction(pendingIssue,signal.nums,false);},1200);
+               }
+              }"""
+          # Match the original indentation robustly.
+          pattern = r"    const autoCoordsEnabled=localStorage\.getItem\(AUTO_COORD_ACTION_KEY\)==='1';\s*if\(autoCoordsEnabled\)\{\s*pendingCoordinateAction=\{issue:pendingIssue,nums:signal\.nums\.slice\(\)\};\s*if\(handedOff\)\{\s*if\(coordinateActionTimer\)clearTimeout\(coordinateActionTimer\);\s*coordinateActionTimer=setTimeout\(\(\)=>\{pendingCoordinateAction=null;sendCoordinateAction\(pendingIssue,signal\.nums,false\);\},1200\);\s*\}\s*\}"
+          s, n = re.subn(pattern, """    if(handedOff){
+               pendingCoordinateAction={issue:pendingIssue,nums:signal.nums.slice()};
+               if(coordinateActionTimer)clearTimeout(coordinateActionTimer);
+               coordinateActionTimer=setTimeout(()=>{pendingCoordinateAction=null;sendCoordinateAction(pendingIssue,signal.nums,false);},1200);
+              }""", s, count=1)
+          if n != 1: raise SystemExit("Could not connect Start/Pause automation to the coordinate action")
+
+          pat = r"function sendCoordinateAction\(issue,nums,manual=false\)\{.*?\n\}\n\$\('autoCoordEnabled'\)"
+          fn = """function getAutoBetAmount(issue){
+           const settings=readBetSettings();
+           const cmp=(a,b)=>String(a??'').localeCompare(String(b??''),undefined,{numeric:true});
+           const before=loadSimRounds().filter(x=>!x.backtest&&(x.result==='hit'||x.result==='miss')&&cmp(x.issue,issue)<0).sort((a,b)=>cmp(a.issue,b.issue));
+           let misses=0;for(let i=before.length-1;i>=0;i--){if(before[i].result==='miss')misses++;else break;}
+           const tiers=(Array.isArray(settings.tiers)&&settings.tiers.length===4?settings.tiers:[5,15,45,135]).map(Number);
+           const amount=Number(tiers[Math.min(misses,3)]);
+           return String(Math.round(Math.max(0,Number.isFinite(amount)?amount:0)*100)/100);
+          }
+          function sendCoordinateAction(issue,nums,manual=false){
+           const frame=$('betWebFrame');
+           if(!Array.isArray(nums)||nums.length!==6||new Set(nums.map(Number)).size!==6||nums.some(n=>!Number.isInteger(Number(n))||Number(n)<1||Number(n)>10)){$('betWebUrlStatus').textContent='候选号无效，已停止自动操作。';return false;}
+           if(!frame||!frame.contentWindow||!betFrameLoaded){$('betWebUrlStatus').textContent='投注网页未加载，自动操作已停止。';return false;}
+           const coords={numbers:[[0.291,0.421],[0.486,0.421],[0.679,0.421],[0.874,0.421],[0.292,0.527],[0.486,0.527],[0.679,0.527],[0.873,0.527],[0.291,0.634],[0.486,0.634]],amount:[0.875,0.828],immediate:[0.823,0.924],clear:[0.925,0.233],close:[0.059,0.233],confirm:[0.499,0.941],reset:true};
+           const payload={type:'AU10_COORD_ACTION',issue:String(issue||''),nums:nums.map(Number),amount:getAutoBetAmount(issue),coords};
+           try{frame.contentWindow.postMessage(payload,'*');$('betWebUrlStatus').textContent='已按69/70截图位置发送自动选号、金额填写与确认序列。';return true;}catch(e){$('betWebUrlStatus').textContent='坐标操作请求失败：'+(e.message||e);return false;}
+          }
+          $('autoCoordEnabled')"""
+          s, n = re.subn(pat, lambda m: fn, s, count=1, flags=re.S)
+          if n != 1: raise SystemExit("Could not replace the old hard-coded screenshot coordinates")
+
+          s = s.replace("$('bottomHome').onclick=()=>showPanel('homePanel');", "$('bottomHome').onclick=()=>setAutomationState(!automationRunning);", 1)
+          s = s.replace("const syncBottom=()=>{const toggle=$('bottomToggle');if(toggle){toggle.textContent=automationRunning?'启停：运行中':'启停：暂停';toggle.classList.toggle('danger',automationRunning);}};",
+                        "const syncBottom=()=>{const toggle=$('bottomHome');if(toggle){toggle.textContent=automationRunning?'暂停':'启动';toggle.classList.toggle('danger',automationRunning);toggle.classList.toggle('secondary',!automationRunning);}};", 1)
+          s = s.replace("for(const key of keys){const el=$(key);if(el)el.style.display=key===id?'block':'none';}",
+                        "for(const key of keys){const el=$(key);if(el)el.style.display=key===id?(key==='betWebPanel'?'flex':'block'):'none';}", 1)
+          s = s.replace('手动按截图坐标选号、填金额10并打开确认页', '按截图坐标自动操作')
+          s = s.replace('③ 金额与下注方式', '② 四个金额档位自定义')
+          s = s.replace('保存下注方式', '保存四档金额')
+          css = """
+          <style id="au10-automation-settings-only">
+          #settingsPanel .settingsSection:nth-of-type(2),#settingsPanel hr{display:none!important}
+          #settingsPanel .settingsSection:first-of-type #runScreenshotCoords,
+          #settingsPanel .settingsSection:first-of-type label:has(#autoCoordEnabled),
+          #settingsPanel .settingsSection:first-of-type .small{display:none!important}
+          #settingsPanel .settingsSection:nth-of-type(3)>p.warning{display:none!important}
+          #settingsPanel .settingsSection:nth-of-type(3) .settinggrid>div:not(#tierFields){display:none!important}
+          </style>
+          """
+          if 'id="au10-automation-settings-only"' not in s:
+              s = s.replace('</head>', css + '\n</head>', 1)
+          s = s.replace("$('autoCoordEnabled').checked=localStorage.getItem(AUTO_COORD_ACTION_KEY)==='1';", "$('autoCoordEnabled').checked=true;")
+          s = s.replace("$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,$('autoCoordEnabled').checked?'1':'0');$('betWebUrlStatus').textContent=$('autoCoordEnabled').checked?'已启用新期开奖自动坐标操作；仅尝试打开最终确认页。':'已关闭新期开奖自动坐标操作。';});",
+                        "$('autoCoordEnabled').addEventListener('change',()=>{localStorage.setItem(AUTO_COORD_ACTION_KEY,'1');});")
+          s = s.replace('状态：运行中。每 15 秒检查开奖、生成每期六号码模拟记录，并在开奖结算后核对命中；未启用真实投注。',
+                        '状态：运行中。每15秒检查开奖；符合条件时按69/70标注位置自动选号、填写四档金额并执行确认。')
+          s = s.replace('网页坐标操作仍需手动发起，最终确认投注不会自动点击。', '符合条件的新开奖会触发截图坐标操作；请保持网页布局与标注截图一致。')
+          hp.write_text(s, encoding="utf-8")
+
+          t = sp.read_text(encoding="utf-8")
+          old_click = """                  const clickAt = (x,y,label) => {
+                    x=Number(x); y=Number(y);
+                    if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) throw new Error(label+'坐标超出当前网页可视区域；已停止，未继续点击');
+                    const el=document.elementFromPoint(x,y);
+                    if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
+                    el.click(); return el;
+                  };"""
+          new_click = """                  const clickAt = (x,y,label) => {
+                    x=Number(x); y=Number(y);
+                    if (Number.isFinite(x)&&Number.isFinite(y)&&x>=0&&x<=1&&y>=0&&y<=1) { x=Math.round(x*Math.max(1,innerWidth-1)); y=Math.round(y*Math.max(1,innerHeight-1)); }
+                    if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=innerWidth||y>=innerHeight) throw new Error(label+'坐标超出当前网页可视区域；已停止，未继续点击');
+                    const el=document.elementFromPoint(x,y);
+                    if (!el || !el.getClientRects().length) throw new Error(label+'坐标未命中可见网页元素；已停止');
+                    el.click(); return el;
+                  };"""
+          if old_click not in t: raise SystemExit("Could not find native coordinate click handler")
+          t = t.replace(old_click, new_click, 1)
+          old_seq = """                    let completed=0;
+                    try {
+                      for (const n of nums) { const point=coords.numbers[n-1]; if (!Array.isArray(point)||point.length<2) throw new Error('号码'+n+'没有配置坐标'); clickAt(point[0],point[1],'号码'+n); completed++; await wait(180); }
+                      const amountPoint=coords.amount;
+                      const inputEl=clickAt(amountPoint?.[0],amountPoint?.[1],'金额输入框');
+                      if (!['INPUT','TEXTAREA'].includes(inputEl.tagName) || inputEl.disabled || inputEl.readOnly) throw new Error('金额坐标没有命中可编辑的金额输入框');
+                      inputEl.focus();
+                      const value=String(d.amount||'10');
+                      const proto=Object.getPrototypeOf(inputEl);
+                      const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;
+                      if(setter) setter.call(inputEl,value); else inputEl.value=value;
+                      inputEl.dispatchEvent(new Event('input',{bubbles:true})); inputEl.dispatchEvent(new Event('change',{bubbles:true}));
+                      await wait(250);
+                      if (String(inputEl.value)!==value) throw new Error('金额输入后校验不一致；已停止，未点击下一步');
+                      clickAt(coords.immediate?.[0],coords.immediate?.[1],'立即投注/下一步');
+                      report('已完成坐标点击尝试：号码点击'+completed+'/6，金额字段校验为'+value+'；已尝试打开下一步页面。请核对实际页面；最终确认投注未点击。');
+                    } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
+          new_seq = """                    let completed=0;
+                    try {
+                      if (coords.reset) {
+                        clickAt(coords.immediate?.[0],coords.immediate?.[1],'打开当前投注确认单'); await wait(500);
+                        clickAt(coords.clear?.[0],coords.clear?.[1],'清空旧选号'); await wait(300);
+                        clickAt(coords.close?.[0],coords.close?.[1],'关闭确认单'); await wait(350);
+                      }
+                      for (const n of nums) { const point=coords.numbers[n-1]; if (!Array.isArray(point)||point.length<2) throw new Error('号码'+n+'没有配置坐标'); clickAt(point[0],point[1],'号码'+n); completed++; await wait(160); }
+                      const amountPoint=coords.amount;
+                      const inputEl=clickAt(amountPoint?.[0],amountPoint?.[1],'金额输入框');
+                      if (!['INPUT','TEXTAREA'].includes(inputEl.tagName) || inputEl.disabled || inputEl.readOnly) throw new Error('金额坐标没有命中可编辑的金额输入框');
+                      inputEl.focus();
+                      const value=String(d.amount||'5');
+                      const proto=Object.getPrototypeOf(inputEl);
+                      const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;
+                      if(setter) setter.call(inputEl,value); else inputEl.value=value;
+                      inputEl.dispatchEvent(new Event('input',{bubbles:true})); inputEl.dispatchEvent(new Event('change',{bubbles:true}));
+                      await wait(250);
+                      if (String(inputEl.value)!==value) throw new Error('金额输入后校验不一致；已停止，未点击下一步');
+                      clickAt(coords.immediate?.[0],coords.immediate?.[1],'立即投注/下一步'); await wait(700);
+                      clickAt(coords.confirm?.[0],coords.confirm?.[1],'确认投注'); await wait(500);
+                      report('自动坐标序列已执行：号码点击'+completed+'/6，金额字段校验为'+value+'，并已点击确认投注。网站是否接受仍以页面回执/投注记录为准。');
+                    } catch(err) { report('坐标操作中止（已完成号码点击'+completed+'/6）：'+String(err&&err.message||err)); }"""
+          if old_seq not in t: raise SystemExit("Could not find native coordinate action sequence")
+          t = t.replace(old_seq, new_seq, 1)
+          sp.write_text(t, encoding="utf-8")
+
+          scripts = re.findall(r'<script[^>]*>(.*?)</script>', s, re.S|re.I)
+          pathlib.Path('/tmp/au10-automation.js').write_text('\n'.join(scripts), encoding='utf-8')
+          assert '0.291,0.421' in s and '0.499,0.941' in s
+          assert 'const autoCoordsEnabled' not in s
+          assert "setAutomationState(!automationRunning)" in s
+          assert 'id="au10-automation-settings-only"' in s
+          assert '确认投注' in t and 'Number.isFinite(x)' in t
+          print('Screenshot-coordinate automation patch verified.')
+          PY
+          node --check /tmp/au10-automation.js
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build and package ad-hoc signed IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          xcodegen generate --spec project.yml
+          xcodebuild -project AU10Local.xcodeproj -scheme AU10Local -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO build
+          APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" -type d -name 'AU10Local.app' -path '*/Build/Products/Release-iphoneos/*' -print -quit)"
+          test -n "$APP_PATH"
+          mkdir -p "$APP_PATH/Web"
+          cp "$GITHUB_WORKSPACE/extracted/au10-statistics-main/ios-local-app/Web/index.html" "$APP_PATH/Web/index.html"
+          codesign --force --deep --sign - --timestamp=none "$APP_PATH"
+          codesign --verify --deep --strict "$APP_PATH"
+          mkdir -p "$GITHUB_WORKSPACE/package/Payload"
+          cp -R "$APP_PATH" "$GITHUB_WORKSPACE/package/Payload/"
+          cd "$GITHUB_WORKSPACE/package"
+          zip -qr AU10-Automation-adhoc-signed.ipa Payload
+          unzip -t AU10-Automation-adhoc-signed.ipa
+          codesign -dv --verbose=2 Payload/AU10Local.app 2>&1 | grep -E 'Signature=adhoc|Identifier=com.jbd0086.au10local'
+
+      - name: Upload automation IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: AU10-Automation-adhoc-signed-IPA
+          path: package/AU10-Automation-adhoc-signed.ipa
+          if-no-files-found: error
+          retention-days: 30
