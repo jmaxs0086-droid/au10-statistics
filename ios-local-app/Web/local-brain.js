@@ -112,5 +112,56 @@
   function reset() { state = { queue: [], step: 1, lastIssue: '', pendingIssue: '', pendingCandidates: [], history: [], paused: false, amounts: DEFAULT_AMOUNTS.slice() }; save(); }
   function getState() { return JSON.parse(JSON.stringify(state)); }
 
-  root.AU10LocalBrain = Object.freeze({ buildMissQueue, shouldTrigger, begin, settle, amount, setAmounts, setPaused, reset, getState, historyLimit: HISTORY_LIMIT, queueLength: QUEUE_LENGTH });
+  function appHistory() {
+    try {
+      if (typeof root.loadSimRounds === 'function') return root.loadSimRounds() || [];
+    } catch (_) {}
+    return [];
+  }
+  function appStatus(message) {
+    const el = root.document && root.document.getElementById('betWebUrlStatus');
+    if (el) el.textContent = message;
+  }
+  function installIntegration() {
+    if (root.__au10LocalBrainInstalled) return;
+    root.__au10LocalBrainInstalled = true;
+    const original = root.sendCoordinateAction;
+    if (typeof original === 'function') {
+      root.sendCoordinateAction = function(issue, nums, manual) {
+        if (manual) return original.apply(this, arguments);
+        const history = appHistory();
+        if (!state.queue.length) buildMissQueue(history);
+        const decision = begin(issue, nums);
+        if (!decision.ok) {
+          appStatus('本地大脑：' + decision.reason + '；未执行点击。');
+          return false;
+        }
+        appStatus('本地大脑已触发：第' + decision.step + '档，金额 ' + decision.amount + '；正在执行网页坐标操作。');
+        const result = original.apply(this, arguments);
+        if (result === false) {
+          state.pendingIssue = '';
+          state.pendingCandidates = [];
+          save();
+        }
+        return result;
+      };
+    } else {
+      appStatus('本地大脑已加载；等待应用点击接口就绪。');
+    }
+    // Settle only from locally stored draw records; never infer a win from clicks alone.
+    root.setInterval(function() {
+      if (!state.pendingIssue) return;
+      const rows = appHistory();
+      const found = rows.find(x => issueOf(x) === state.pendingIssue);
+      if (!found) return;
+      const champion = championOf(found);
+      const result = String(found.result || found.status || '').toLowerCase();
+      if (champion < 1 || champion > 10 || !(/hit|miss|命中|未中|未命中/.test(result) || found.settled === true)) return;
+      const out = settle(champion, state.pendingIssue, rows);
+      if (out.settled) appStatus('本地结算：' + (out.hit ? '命中，档位重置' : '未命中') + '；下一档 ' + out.nextStep + '，金额 ' + out.amount + '。');
+    }, 2500);
+  }
+  root.AU10LocalBrain = Object.freeze({ buildMissQueue, shouldTrigger, begin, settle, amount, setAmounts, setPaused, reset, getState, installIntegration, historyLimit: HISTORY_LIMIT, queueLength: QUEUE_LENGTH });
+  if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', installIntegration, { once: true });
+  else installIntegration();
 })(window);
