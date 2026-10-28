@@ -44,11 +44,14 @@
     try { root.localStorage.setItem(KEY, JSON.stringify(state)); } catch (_) {}
   }
   function buildMissQueue(history) {
-    const entries = (Array.isArray(history) ? history : []).map(x => ({
-      issue: issueOf(x), champion: championOf(x), candidates: candidatesOf(x)
-    })).filter(x => x.issue).sort((a,b) => cmpIssue(b.issue, a.issue)).slice(0, 20);
+    const entries = (Array.isArray(history) ? history : [])
+      .filter(x => x && /^\\d+$/.test(String(x.issue ?? x.period ?? x.issueNo ?? x.expect ?? '')) &&
+        (x.result === 'hit' || x.result === 'miss') && championOf(x) >= 1 && championOf(x) <= 10)
+      .map(x => ({ issue: issueOf(x), champion: championOf(x), candidates: candidatesOf(x) }))
+      .filter(x => x.issue && x.candidates.length === 6)
+      .sort((a,b) => cmpIssue(b.issue, a.issue)).slice(0, 21);
     const missTails = [], seen = new Set();
-    for (let i = 1; i < Math.min(entries.length, 20); i++) {
+    for (let i = 1; i < Math.min(entries.length, 21); i++) {
       const older = entries[i], newer = entries[i - 1];
       if (!older.candidates.length || newer.champion < 1 || newer.champion > 10) continue;
       if (older.candidates.includes(newer.champion)) continue;
