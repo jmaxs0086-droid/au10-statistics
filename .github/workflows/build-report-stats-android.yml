@@ -1,0 +1,50 @@
+name: Build Report Stats Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'report-stats-android/**'
+      - '.github/workflows/build-report-stats-android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Reconstruct project source archive
+        shell: bash
+        run: |
+          cat report-stats-android/source-*.b64 | base64 --decode > /tmp/report-stats-source.zip
+          mkdir -p report-stats-android/build-src
+          unzip -q /tmp/report-stats-source.zip -d report-stats-android/build-src
+          rm -f report-stats-android/build-src/ReportStatsLicenseProject/issuer/license_private_key.pem
+          test -f report-stats-android/build-src/ReportStatsLicenseProject/app/src/main/AndroidManifest.xml
+
+      - name: Build debug APK
+        working-directory: report-stats-android/build-src/ReportStatsLicenseProject
+        run: gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReportStatsLicense-debug-APK
+          path: report-stats-android/build-src/ReportStatsLicenseProject/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
